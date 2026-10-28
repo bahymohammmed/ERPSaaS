@@ -113,6 +113,35 @@ Every report can be viewed on screen or exported as PDF or Excel, in Arabic, Eng
 
 Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebuilds it from posted lines, and a test asserts that the rebuild matches.
 
+### Period-end and planning (phase 2)
+- **Accruals**: an entry with an auto-reverse date gets its mirror entry posted automatically on that date.
+- **Recurring entries**: any posted or draft entry can become a monthly, quarterly, semi-annual or yearly schedule.
+  - Each run posts automatically, or is submitted for approval when the company requires it.
+  - An hourly scheduler catches up missed runs; a day of 31 falls on the last day of shorter months.
+  - Failures are recorded on the schedule, which does not advance until the run succeeds.
+- **Approval threshold**: entries below a company-defined amount can post without approval.
+- **FX revaluation**: foreign-currency balances on accounts flagged *revalue* are restated at the CLOSING rate (SPOT as fallback).
+  - The adjustment is base-currency-only on the original currency, so the next revaluation sees the adjusted carrying amount.
+  - The net result goes to the unrealised gain or loss account, and the entry auto-reverses the next day by default.
+- **Cost allocation**: rules move balances from source cost centers to target cost centers, by fixed percentages or by a statistical driver (headcount, area, …) entered per period.
+  - Rules run in step order inside one transaction, so later steps allocate what earlier steps moved (step-down).
+  - A run can be previewed (executed and rolled back), posted once per period, and reversed.
+- **Budgets**: versions per fiscal year, entered as an account × month grid per cost center or at company level, with approval.
+  - Can be generated from a year's actuals with a percentage adjustment.
+  - The budget-vs-actual report shows variance (positive = favourable) and achievement %.
+- **Year-end close**: posts the statutory appropriations, closes revenue and expenses to retained earnings per cost center in the adjustment period, and closes the year's periods.
+  - EXPENSE-stage rules (KFAS, NLST, Zakat) are charged to profit; RESERVE-stage rules (statutory reserve) are transferred from retained earnings.
+  - The statutory reserve stops at its cap (50% of paid-up capital).
+  - The preview shows every amount first. Reopening the year reverses all year-end entries.
+  - P&L reports exclude the closing entry, so a full-year income statement is still meaningful after closing.
+- **Statement designer**: statements are built from rows that sum account codes or ranges (`41,4201-4204`), combine other rows by formula (`GP+OI-STAFF`), or show the unclosed result.
+  - IFRS profit-or-loss and financial-position layouts are seeded.
+  - The report lists accounts with balances that no row covers, or that two rows both cover.
+- **Excel import**: chart of accounts and journals from `.xlsx`, with downloadable templates.
+  - Every row goes through the normal validation in one transaction; the preview reports all row errors and rolls back.
+  - A commit is all-or-nothing, and imported journals can be posted in the same step.
+- **Journal voucher PDF**: a printable voucher with the amount in words in Arabic and English (e.g. "فقط ألف وخمسمائة دينار كويتي ومائتان وخمسون فلس لا غير").
+
 ### Arabic / English
 - Master data has `name_ar` and `name_en`; if one is missing, the other is shown.
 - Search normalizes Arabic: alef forms, ta marbuta, alef maqsura, diacritics and tatweel.
@@ -160,25 +189,17 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 | Admin | `admin/companies`, `admin/users`, `admin/roles`, `GET admin/audit` |
 | Master data | `gl/accounts`, `gl/cost-centers`, `gl/dimensions`, `gl/dimension-values`, `gl/journal-types`, `gl/distribution-templates`, `gl/currencies`, `gl/exchange-rates`, `gl/fiscal-years`, `gl/periods`, `PATCH gl/periods/:id/status` |
 | Journals | `gl/journals` CRUD, `POST gl/journals/:id/{submit,approve,reject,post,reverse}`, attachments, `GET gl/journals/:id/audit`, `POST gl/postings` |
-| Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary}` with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
+| Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary,budget-vs-actual,statement}`, `GET gl/reports/voucher/:id`, with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
+| Period-end | `gl/recurring` (+ `/:id/run`), `POST gl/fx-revaluation[/preview]`, `gl/allocation/{drivers,rules,runs}`, `POST gl/allocation/preview`, `gl/budgets` (+ `/lines`, `/generate`, `/status`), `gl/year-end/{rules,close,reopen}`, `GET gl/year-end/:fiscalYearId/preview`, `gl/statements`, `gl/import/{accounts,journals}`, `GET gl/import/templates/:kind` |
 
-## Not yet built (phase 2)
+## Not yet built
 
-- Recurring and auto-reversing entries.
-- Cost allocation engine with statistical drivers.
-- FX revaluation.
-- Year-end close: closing entries plus Kuwaiti statutory appropriations.
-- Budgets.
-- Financial statement designer.
-- Cash flow statement.
-- Excel import.
-- Amount in words.
-- Approval thresholds.
-
-Further out:
+- Cash flow statement (the cash-flow categories on accounts are already in place).
+- Budget control: blocking postings that exceed budget.
+- Multi-entity consolidation, intercompany entries and eliminations.
+- Cost center hierarchy versioning.
 - OIDC/SSO and MFA (auth is local accounts today).
 - Email delivery of invitations (a temporary password is shown once to the administrator).
 - Object storage for attachments (local disk today).
 - Rate limiting.
 - Per-tenant export and restore.
-- Multi-entity consolidation.

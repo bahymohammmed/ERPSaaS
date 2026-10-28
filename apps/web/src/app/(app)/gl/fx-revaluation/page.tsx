@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Checkbox, Group, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput } from '@mantine/core';
-import { RATE_TYPES } from '@erp/shared';
+import { RATE_TYPES, toMoney } from '@erp/shared';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Amount, PageHeader } from '@/components/common';
@@ -107,7 +107,7 @@ const FxRevaluationPage = () => {
                     </Table.Td>
                     <Table.Td className="ltr">{l.cost_center_code ?? ''}</Table.Td>
                     <Table.Td>{l.currency_code}</Table.Td>
-                    <Table.Td className="amount-cell num">{l.foreign_balance}</Table.Td>
+                    <Table.Td className="amount-cell num">{toMoney(l.foreign_balance).toFixed(2)}</Table.Td>
                     <Table.Td className="amount-cell"><Amount value={l.base_balance} minor={minor} /></Table.Td>
                     <Table.Td className="amount-cell num">{l.rate}</Table.Td>
                     <Table.Td className="amount-cell"><Amount value={l.revalued_balance} minor={minor} /></Table.Td>
