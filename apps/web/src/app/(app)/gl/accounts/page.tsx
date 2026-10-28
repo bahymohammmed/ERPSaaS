@@ -40,6 +40,7 @@ type Form = {
   allowed_currencies: string[];
   cash_flow_category: string | null;
   is_reconcilable: boolean;
+  revalue: boolean;
   is_active: boolean;
   dimension_rules: { dimension_type_id: string; rule: DimensionRule }[];
 };
@@ -60,6 +61,7 @@ const emptyForm = (parent?: Account): Form => ({
   allowed_currencies: [],
   cash_flow_category: null,
   is_reconcilable: false,
+  revalue: false,
   is_active: true,
   dimension_rules: [],
 });
@@ -241,6 +243,7 @@ const AccountsPage = () => {
               <Checkbox label={t('isPosting')} checked={form.is_posting} onChange={(e) => set('is_posting', e.currentTarget.checked)} />
               <Checkbox label={t('active')} checked={form.is_active} onChange={(e) => set('is_active', e.currentTarget.checked)} />
               <Checkbox label={t('reconcilable')} checked={form.is_reconcilable} onChange={(e) => set('is_reconcilable', e.currentTarget.checked)} />
+              {form.is_posting && <Checkbox label={t('revalue')} checked={form.revalue} onChange={(e) => set('revalue', e.currentTarget.checked)} />}
             </Group>
             {form.is_posting && (
               <>

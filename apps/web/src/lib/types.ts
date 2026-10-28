@@ -100,6 +100,7 @@ export type JournalEntry = {
   reversed_by_no: string | null;
   reversal_of_id: string | null;
   reversal_of_no: string | null;
+  auto_reverse_date: string | null;
   lines: JournalLine[];
   attachments: { id: string; file_name: string; size_bytes: number; uploaded_at: string }[];
 };

@@ -53,7 +53,7 @@ type EditLine = {
   split: SplitRow[];
   dimensions: Record<string, string>;
 };
-type Header = { journal_type_id: string | null; entry_date: string; adjustment_period: boolean; description: string; reference: string };
+type Header = { journal_type_id: string | null; entry_date: string; adjustment_period: boolean; description: string; reference: string; auto_reverse_date: string };
 
 let keySeq = 0;
 const nextKey = () => `l${++keySeq}`;
@@ -96,7 +96,7 @@ const isNumber = (v: string) => /^\d+(\.\d+)?$/.test(v.trim());
 const safe = (v: string): MoneyValue => (isNumber(v) ? toMoney(v.trim()) : new Money(0));
 
 export const JournalEditor = ({ id }: { id?: string }) => {
-  const { t, name, errorText, locale, amount } = useI18n();
+  const { t, name, errorText, locale, amount, digits } = useI18n();
   const { company, can } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -122,12 +122,41 @@ export const JournalEditor = ({ id }: { id?: string }) => {
   });
   const entry = entryQuery.data;
 
-  const [header, setHeader] = useState<Header>({ journal_type_id: null, entry_date: new Date().toISOString().slice(0, 10), adjustment_period: false, description: '', reference: '' });
+  const [header, setHeader] = useState<Header>({ journal_type_id: null, entry_date: new Date().toISOString().slice(0, 10), adjustment_period: false, description: '', reference: '', auto_reverse_date: '' });
   const [lines, setLines] = useState<EditLine[]>(() => [blankLine(base), blankLine(base)]);
   const [busy, setBusy] = useState(false);
   const [lineDetails, setLineDetails] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reversing, setReversing] = useState<{ date: string; description: string } | null>(null);
+  const [recurring, setRecurring] = useState<{ code: string; name: string; frequency: string; day_of_month: number; start_date: string; end_date: string; auto_post: boolean } | null>(null);
+
+  const printVoucher = () =>
+    download(`/gl/reports/voucher/${id}`, { format: 'pdf', lang: locale, digits }, 'voucher.pdf').catch((e: unknown) => notifyError(errorText(e)));
+
+  const makeRecurring = () =>
+    run(async () => {
+      if (!recurring) return;
+      try {
+        await api('/gl/recurring', {
+          method: 'POST',
+          body: {
+            code: recurring.code,
+            name_ar: locale === 'ar' ? recurring.name : '',
+            name_en: locale === 'en' ? recurring.name : '',
+            frequency: recurring.frequency,
+            day_of_month: recurring.day_of_month,
+            start_date: recurring.start_date,
+            end_date: recurring.end_date || null,
+            auto_post: recurring.auto_post,
+            from_entry_id: id,
+          },
+        });
+        notifySuccess(t('saved'));
+        setRecurring(null);
+      } catch (error) {
+        notifyError(errorText(error));
+      }
+    });
 
   const editable = can('gl.journal.create') && (!id || entry?.status === 'DRAFT');
 
@@ -139,6 +168,7 @@ export const JournalEditor = ({ id }: { id?: string }) => {
       adjustment_period: entry.period_code.endsWith('-13'),
       description: entry.description ?? '',
       reference: entry.reference ?? '',
+      auto_reverse_date: entry.auto_reverse_date ?? '',
     });
     setLines(entry.lines.map((l) => fromServerLine(l, base)));
   }, [entry, base]);
@@ -183,6 +213,7 @@ export const JournalEditor = ({ id }: { id?: string }) => {
     journal_type_id: header.journal_type_id,
     entry_date: header.entry_date,
     adjustment_period: header.adjustment_period,
+    auto_reverse_date: header.auto_reverse_date || null,
     description: header.description || null,
     reference: header.reference || null,
     version: entry?.version,
@@ -366,6 +397,29 @@ export const JournalEditor = ({ id }: { id?: string }) => {
                 {t('post')}
               </Button>
             )}
+            {id && entry && (
+              <Button variant="default" onClick={printVoucher}>
+                {t('printVoucher')}
+              </Button>
+            )}
+            {id && entry && entry.source_module === 'GL' && can('gl.journal.create') && (
+              <Button
+                variant="default"
+                onClick={() =>
+                  setRecurring({
+                    code: '',
+                    name: entry.description ?? '',
+                    frequency: 'MONTHLY',
+                    day_of_month: Number(entry.entry_date.slice(8, 10)),
+                    start_date: entry.entry_date,
+                    end_date: '',
+                    auto_post: true,
+                  })
+                }
+              >
+                {t('makeRecurring')}
+              </Button>
+            )}
             {status === 'POSTED' && can('gl.journal.reverse') && (
               <Button color="red" variant="light" onClick={() => setReversing({ date: entry?.entry_date ?? '', description: '' })} leftSection={<IconArrowBackUp size={16} />}>
                 {t('reverse')}
@@ -423,7 +477,16 @@ export const JournalEditor = ({ id }: { id?: string }) => {
           )}
         </SimpleGrid>
         <Textarea mt="sm" label={t('description')} autosize minRows={1} value={header.description} onChange={(e) => setHeader({ ...header, description: e.currentTarget.value })} disabled={!editable} />
-        {editable && <Checkbox mt="sm" label={t('adjustmentPeriod')} checked={header.adjustment_period} onChange={(e) => setHeader({ ...header, adjustment_period: e.currentTarget.checked })} />}
+        <Group mt="sm" align="flex-end">
+          <TextInput
+            type="date"
+            label={t('autoReverseDate')}
+            value={header.auto_reverse_date}
+            onChange={(e) => setHeader({ ...header, auto_reverse_date: e.currentTarget.value })}
+            disabled={!editable}
+          />
+          {editable && <Checkbox mb={8} label={t('adjustmentPeriod')} checked={header.adjustment_period} onChange={(e) => setHeader({ ...header, adjustment_period: e.currentTarget.checked })} />}
+        </Group>
         {entry && (
           <Group mt="sm" gap="lg">
             {entry.created_by_name && (
@@ -751,6 +814,33 @@ export const JournalEditor = ({ id }: { id?: string }) => {
             ))}
             <Group justify="flex-end">
               <Button onClick={() => setLineDetails(null)}>{t('save')}</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+
+      <Modal opened={!!recurring} onClose={() => setRecurring(null)} title={t('makeRecurring')}>
+        {recurring && (
+          <Stack>
+            <SimpleGrid cols={2}>
+              <TextInput label={t('code')} required value={recurring.code} onChange={(e) => setRecurring({ ...recurring, code: e.currentTarget.value })} classNames={{ input: 'ltr' }} />
+              <TextInput label={t('name')} required value={recurring.name} onChange={(e) => setRecurring({ ...recurring, name: e.currentTarget.value })} />
+              <Select
+                label={t('frequency')}
+                data={(['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY'] as const).map((f) => ({ value: f, label: t(`freq${f}`) }))}
+                value={recurring.frequency}
+                onChange={(v) => setRecurring({ ...recurring, frequency: v ?? 'MONTHLY' })}
+                allowDeselect={false}
+              />
+              <TextInput type="number" min={1} max={31} label={t('dayOfMonth')} value={recurring.day_of_month} onChange={(e) => setRecurring({ ...recurring, day_of_month: Number(e.currentTarget.value) })} />
+              <TextInput type="date" label={t('startDate')} value={recurring.start_date} onChange={(e) => setRecurring({ ...recurring, start_date: e.currentTarget.value })} />
+              <TextInput type="date" label={t('endDate')} value={recurring.end_date} onChange={(e) => setRecurring({ ...recurring, end_date: e.currentTarget.value })} />
+            </SimpleGrid>
+            <Checkbox label={t('autoPost')} checked={recurring.auto_post} onChange={(e) => setRecurring({ ...recurring, auto_post: e.currentTarget.checked })} />
+            <Group justify="flex-end">
+              <Button onClick={makeRecurring} loading={busy} disabled={!recurring.code || !recurring.name}>
+                {t('save')}
+              </Button>
             </Group>
           </Stack>
         )}

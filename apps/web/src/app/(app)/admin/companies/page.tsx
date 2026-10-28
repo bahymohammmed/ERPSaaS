@@ -23,6 +23,9 @@ type Company = {
   require_approval: boolean;
   rounding_account_id: string | null;
   retained_earnings_account_id: string | null;
+  fx_gain_account_id?: string | null;
+  fx_loss_account_id?: string | null;
+  approval_threshold?: string | null;
   is_active: boolean;
   first_fiscal_year?: number;
   seed_chart_of_accounts?: boolean;
@@ -135,9 +138,19 @@ const CompaniesPage = () => {
               <SimpleGrid cols={{ base: 1, sm: 2 }}>
                 <AccountSelect label={t('roundingAccount')} value={form.rounding_account_id} onChange={(v) => set('rounding_account_id', v)} />
                 <AccountSelect label={t('retainedEarningsAccount')} value={form.retained_earnings_account_id} onChange={(v) => set('retained_earnings_account_id', v)} />
+                <AccountSelect label={t('fxGainAccount')} value={form.fx_gain_account_id ?? null} onChange={(v) => set('fx_gain_account_id', v)} />
+                <AccountSelect label={t('fxLossAccount')} value={form.fx_loss_account_id ?? null} onChange={(v) => set('fx_loss_account_id', v)} />
               </SimpleGrid>
             )}
             <Checkbox label={t('requireApproval')} checked={form.require_approval} onChange={(e) => set('require_approval', e.currentTarget.checked)} />
+            {form.require_approval && (
+              <TextInput
+                label={t('approvalThreshold')}
+                classNames={{ input: 'ltr' }}
+                value={form.approval_threshold ? String(Number(form.approval_threshold)) : ''}
+                onChange={(e) => set('approval_threshold', e.currentTarget.value || null)}
+              />
+            )}
             {!form.id && <Checkbox label={t('seedCoa')} checked={!!form.seed_chart_of_accounts} onChange={(e) => set('seed_chart_of_accounts', e.currentTarget.checked)} />}
             {form.id && <Checkbox label={t('active')} checked={form.is_active} onChange={(e) => set('is_active', e.currentTarget.checked)} />}
             <Group justify="flex-end">

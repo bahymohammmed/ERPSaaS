@@ -10,11 +10,11 @@ import { notifyError } from '@/components/notify';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/messages';
 import { api, download } from '@/lib/api';
-import { useJournalTypes, usePeriods } from '@/lib/queries';
+import { useCompanyQuery, useJournalTypes, usePeriods } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import type { Period } from '@/lib/types';
 
-type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope';
+type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement';
 
 const REPORTS: Record<string, { title: MessageKey; fields: Field[]; required: string[] }> = {
   'trial-balance': { title: 'reportTrialBalance', fields: ['periodRange', 'costCenter', 'level', 'includeZero'], required: ['from_period_id', 'to_period_id'] },
@@ -24,7 +24,12 @@ const REPORTS: Record<string, { title: MessageKey; fields: Field[]; required: st
   'balance-sheet': { title: 'reportBalanceSheet', fields: ['period', 'level', 'compare'], required: ['period_id'] },
   'cost-center-matrix': { title: 'reportCostCenterMatrix', fields: ['periodRange', 'parentCostCenter', 'accountScope'], required: ['from_period_id', 'to_period_id'] },
   'cost-center-summary': { title: 'reportCostCenterSummary', fields: ['periodRange'], required: ['from_period_id', 'to_period_id'] },
+  'budget-vs-actual': { title: 'reportBudgetVsActual', fields: ['budget', 'periodRange', 'costCenter', 'level'], required: ['budget_id', 'from_period_id', 'to_period_id'] },
+  statement: { title: 'reportStatement', fields: ['statement', 'periodRange', 'period', 'costCenter', 'compare'], required: ['statement_id'] },
 };
+
+type Option = { id: string; code: string; name_ar: string; name_en: string };
+type StatementOption = Option & { basis: 'PERIOD' | 'POSITION' };
 
 type Params = Record<string, string>;
 
@@ -53,6 +58,8 @@ const ReportScreen = () => {
   const { company } = useSession();
   const { data: periods = [] } = usePeriods();
   const { data: journalTypes = [] } = useJournalTypes();
+  const { data: budgets = [] } = useCompanyQuery<Option[]>(['budgets'], '/gl/budgets');
+  const { data: statements = [] } = useCompanyQuery<StatementOption[]>(['statements'], '/gl/statements');
   const report = REPORTS[key];
   const [params, setParams] = useState<Params | null>(null);
   const [doc, setDoc] = useState<ReportDocument | null>(null);
@@ -104,6 +111,8 @@ const ReportScreen = () => {
       if (field === 'compare') add('compare');
       if (field === 'journalType') add('journal_type_id');
       if (field === 'accountScope') add('account_scope');
+      if (field === 'budget') add('budget_id');
+      if (field === 'statement') add('statement_id');
     }
     return relevant;
   };
@@ -142,6 +151,15 @@ const ReportScreen = () => {
   if (!report) return <Alert color="red">{t('noData')}</Alert>;
   if (!params) return <Text>{t('loading')}</Text>;
 
+  const selectedStatement = statements.find((st) => st.id === params.statement_id);
+  /** Designed statements show a period range or an as-at period depending on their basis. */
+  const show = (field: Field): boolean => {
+    if (!report.fields.includes(field)) return false;
+    if (key !== 'statement') return true;
+    if (field === 'periodRange' || field === 'costCenter') return selectedStatement?.basis !== 'POSITION';
+    if (field === 'period') return selectedStatement?.basis === 'POSITION';
+    return true;
+  };
   const set = (k: string, v: string | null | undefined) => setParams((p) => ({ ...(p ?? {}), [k]: v ?? '' }));
   const periodOptions = periods.map((p) => ({ value: p.id, label: `${p.code} — ${name(p)}` }));
 
@@ -150,27 +168,33 @@ const ReportScreen = () => {
       <PageHeader title={t(report.title)} subtitle={name(company)} />
       <Paper withBorder p="md">
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
-          {report.fields.includes('periodRange') && (
+          {show('budget') && (
+            <Select label={t('budget')} data={budgets.map((b) => ({ value: b.id, label: `${b.code} — ${name(b)}` }))} value={params.budget_id || null} onChange={(v) => set('budget_id', v)} />
+          )}
+          {show('statement') && (
+            <Select label={t('statement')} data={statements.map((st) => ({ value: st.id, label: `${st.code} — ${name(st)}` }))} value={params.statement_id || null} onChange={(v) => set('statement_id', v)} />
+          )}
+          {show('periodRange') && (
             <>
               <Select label={t('fromPeriod')} searchable data={periodOptions} value={params.from_period_id || null} onChange={(v) => set('from_period_id', v)} />
               <Select label={t('toPeriod')} searchable data={periodOptions} value={params.to_period_id || null} onChange={(v) => set('to_period_id', v)} />
             </>
           )}
-          {report.fields.includes('period') && <Select label={t('asOfPeriod')} searchable data={periodOptions} value={params.period_id || null} onChange={(v) => set('period_id', v)} />}
-          {report.fields.includes('account') && <AccountSelect label={t('account')} postingOnly={false} activeOnly={false} value={params.account_id || null} onChange={(v) => set('account_id', v)} />}
-          {report.fields.includes('dateRange') && (
+          {show('period') && <Select label={t('asOfPeriod')} searchable data={periodOptions} value={params.period_id || null} onChange={(v) => set('period_id', v)} />}
+          {show('account') && <AccountSelect label={t('account')} postingOnly={false} activeOnly={false} value={params.account_id || null} onChange={(v) => set('account_id', v)} />}
+          {show('dateRange') && (
             <>
               <TextInput type="date" label={t('from')} value={params.from ?? ''} onChange={(e) => set('from', e.currentTarget.value)} />
               <TextInput type="date" label={t('to')} value={params.to ?? ''} onChange={(e) => set('to', e.currentTarget.value)} />
             </>
           )}
-          {report.fields.includes('costCenter') && (
+          {show('costCenter') && (
             <CostCenterSelect label={t('costCenter')} postingOnly={false} activeOnly={false} value={params.cost_center_id || null} onChange={(v) => set('cost_center_id', v)} />
           )}
-          {report.fields.includes('parentCostCenter') && (
+          {show('parentCostCenter') && (
             <CostCenterSelect label={t('parentCostCenter')} postingOnly={false} activeOnly={false} value={params.parent_cost_center_id || null} onChange={(v) => set('parent_cost_center_id', v)} />
           )}
-          {report.fields.includes('accountScope') && (
+          {show('accountScope') && (
             <Select
               label={t('accountScope')}
               data={(['PL', 'EXPENSE', 'REVENUE'] as const).map((s) => ({ value: s, label: t(`scope${s}`) }))}
@@ -179,13 +203,13 @@ const ReportScreen = () => {
               allowDeselect={false}
             />
           )}
-          {report.fields.includes('journalType') && (
+          {show('journalType') && (
             <Select label={t('journalType')} clearable data={journalTypes.map((jt) => ({ value: jt.id, label: `${jt.code} — ${name(jt)}` }))} value={params.journal_type_id || null} onChange={(v) => set('journal_type_id', v)} />
           )}
-          {report.fields.includes('level') && (
+          {show('level') && (
             <NumberInput label={t('level')} min={1} max={10} value={params.level ? Number(params.level) : ''} onChange={(v) => set('level', v === '' ? '' : String(v))} placeholder={t('all')} />
           )}
-          {report.fields.includes('compare') && (
+          {show('compare') && (
             <Select
               label={t('compare')}
               data={[
@@ -197,7 +221,7 @@ const ReportScreen = () => {
               allowDeselect={false}
             />
           )}
-          {report.fields.includes('includeZero') && (
+          {show('includeZero') && (
             <Checkbox mt="xl" label={t('includeZero')} checked={params.include_zero === 'true'} onChange={(e) => set('include_zero', e.currentTarget.checked ? 'true' : 'false')} />
           )}
         </SimpleGrid>

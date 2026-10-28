@@ -7,6 +7,13 @@ import {
   IconBook2,
   IconBuilding,
   IconCalendarStats,
+  IconArrowsSplit,
+  IconCalendarRepeat,
+  IconCurrencyDollar,
+  IconFileImport,
+  IconLock,
+  IconReportMoney,
+  IconTable,
   IconChartBar,
   IconChevronDown,
   IconCoins,
@@ -43,6 +50,16 @@ const GL_ITEMS: NavItem[] = [
   { href: '/gl/periods', label: 'navPeriods', icon: IconCalendarStats, permission: 'gl.master.view' },
 ];
 
+const CLOSING_ITEMS: NavItem[] = [
+  { href: '/gl/recurring', label: 'navRecurring', icon: IconCalendarRepeat, permission: 'gl.journal.view' },
+  { href: '/gl/fx-revaluation', label: 'navFxRevaluation', icon: IconCurrencyDollar, permission: 'gl.close.manage' },
+  { href: '/gl/allocation', label: 'navAllocation', icon: IconArrowsSplit, permission: 'gl.master.view' },
+  { href: '/gl/budgets', label: 'navBudgets', icon: IconReportMoney, permission: 'gl.report.view' },
+  { href: '/gl/year-end', label: 'navYearEnd', icon: IconLock, permission: 'gl.close.manage' },
+  { href: '/gl/statements', label: 'navStatements', icon: IconTable, permission: 'gl.report.view' },
+  { href: '/gl/import', label: 'navImport', icon: IconFileImport, permission: 'gl.master.manage' },
+];
+
 const REPORT_ITEMS: { key: string; label: MessageKey }[] = [
   { key: 'trial-balance', label: 'reportTrialBalance' },
   { key: 'ledger', label: 'reportLedger' },
@@ -51,6 +68,8 @@ const REPORT_ITEMS: { key: string; label: MessageKey }[] = [
   { key: 'balance-sheet', label: 'reportBalanceSheet' },
   { key: 'cost-center-matrix', label: 'reportCostCenterMatrix' },
   { key: 'cost-center-summary', label: 'reportCostCenterSummary' },
+  { key: 'budget-vs-actual', label: 'reportBudgetVsActual' },
+  { key: 'statement', label: 'reportStatement' },
 ];
 
 const ADMIN_ITEMS: NavItem[] = [
@@ -179,6 +198,9 @@ const Shell = ({ children }: { children: ReactNode }) => {
           <NavLink component={Link} href="/dashboard" label={t('navDashboard')} leftSection={<IconLayoutDashboard size={18} stroke={1.6} />} active={pathname === '/dashboard'} />
           <NavLink label={t('navGl')} defaultOpened childrenOffset={12} leftSection={<IconBook2 size={18} stroke={1.6} />}>
             {GL_ITEMS.map(link)}
+          </NavLink>
+          <NavLink label={t('navClosing')} defaultOpened childrenOffset={12} leftSection={<IconLock size={18} stroke={1.6} />}>
+            {CLOSING_ITEMS.map(link)}
           </NavLink>
           {can('gl.report.view') && (
             <NavLink label={t('navReports')} defaultOpened childrenOffset={12} leftSection={<IconChartBar size={18} stroke={1.6} />}>
