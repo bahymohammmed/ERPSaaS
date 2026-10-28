@@ -8,6 +8,7 @@ import { AppError } from '../common/app-error';
 import { AuditService } from '../common/audit.service';
 import type { RequestContext } from '../common/request-context';
 import { TokenService } from '../common/token.service';
+import { decryptSecret, encryptSecret, generateSecret, otpauthUrl, verifyTotp } from '../common/totp';
 import { DbService } from '../db/db.service';
 import { ProvisioningService } from './provisioning.service';
 
@@ -67,11 +68,18 @@ export class AuthService {
 
   async login(input: LoginInput, ip: string): Promise<Session> {
     const user = await this.db.withoutTenant((tx) =>
-      tx.maybeOne<{ user_id: string; password_hash: string; is_active: boolean }>('SELECT * FROM core.auth_lookup($1)', [input.email]),
+      tx.maybeOne<{ user_id: string; password_hash: string; is_active: boolean; mfa_enabled: boolean; mfa_secret: string | null }>(
+        'SELECT * FROM core.auth_lookup($1)',
+        [input.email],
+      ),
     );
     this.dummyHash ??= this.hashPassword(randomUUID());
     const valid = await verify(user?.password_hash ?? (await this.dummyHash), input.password).catch(() => false);
     if (!user || !valid || !user.is_active) throw new AppError('INVALID_CREDENTIALS');
+    if (user.mfa_enabled && user.mfa_secret) {
+      if (!input.otp) throw new AppError('MFA_REQUIRED');
+      if (!verifyTotp(decryptSecret(user.mfa_secret), input.otp)) throw new AppError('MFA_INVALID');
+    }
 
     const tenants = await this.tenantsOf(user.user_id);
     const tenant = input.tenantId ? tenants.find((t) => t.tenant_id === input.tenantId) : tenants[0];
@@ -93,7 +101,7 @@ export class AuthService {
   async me(ctx: RequestContext) {
     const tenants = await this.tenantsOf(ctx.userId);
     return this.db.withTenant(ctx, async (tx) => {
-      const user = await tx.one('SELECT id, email, full_name, preferred_locale, digit_style FROM core.users WHERE id = $1', [ctx.userId]);
+      const user = await tx.one('SELECT id, email, full_name, preferred_locale, digit_style, mfa_enabled FROM core.users WHERE id = $1', [ctx.userId]);
       const tenant = await tx.one('SELECT id, name, plan_code FROM core.tenants WHERE id = $1', [ctx.tenantId]);
       const companies = await tx.query(
         `SELECT c.id, c.code, c.name_ar, c.name_en, c.base_currency, cur.minor_units AS base_minor_units, c.require_approval, c.is_active
@@ -120,6 +128,37 @@ export class AuthService {
         [ctx.userId, input.preferred_locale ?? null, input.digit_style ?? null, input.full_name ?? null],
       ),
     );
+  }
+
+  /** Starts enrolment: stores a new (not yet active) secret and returns it for the authenticator app. */
+  setupMfa(ctx: RequestContext) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const user = await tx.one<{ email: string; mfa_enabled: boolean }>('SELECT email, mfa_enabled FROM core.users WHERE id = $1', [ctx.userId]);
+      if (user.mfa_enabled) throw new AppError('VALIDATION_FAILED', {}, [{ path: 'mfa', message: 'Two-factor authentication is already enabled' }]);
+      const secret = generateSecret();
+      await tx.query('UPDATE core.users SET mfa_secret = $2 WHERE id = $1', [ctx.userId, encryptSecret(secret)]);
+      return { secret, otpauth_url: otpauthUrl(secret, user.email) };
+    });
+  }
+
+  enableMfa(ctx: RequestContext, code: string) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const user = await tx.one<{ mfa_secret: string | null }>('SELECT mfa_secret FROM core.users WHERE id = $1', [ctx.userId]);
+      if (!user.mfa_secret || !verifyTotp(decryptSecret(user.mfa_secret), code)) throw new AppError('MFA_INVALID');
+      await tx.query('UPDATE core.users SET mfa_enabled = true WHERE id = $1', [ctx.userId]);
+      await this.audit.record(tx, ctx, { action: 'mfa_enable', entityType: 'user', entityId: ctx.userId });
+      return { mfa_enabled: true };
+    });
+  }
+
+  disableMfa(ctx: RequestContext, code: string) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const user = await tx.one<{ mfa_secret: string | null; mfa_enabled: boolean }>('SELECT mfa_secret, mfa_enabled FROM core.users WHERE id = $1', [ctx.userId]);
+      if (!user.mfa_enabled || !user.mfa_secret || !verifyTotp(decryptSecret(user.mfa_secret), code)) throw new AppError('MFA_INVALID');
+      await tx.query('UPDATE core.users SET mfa_enabled = false, mfa_secret = NULL WHERE id = $1', [ctx.userId]);
+      await this.audit.record(tx, ctx, { action: 'mfa_disable', entityType: 'user', entityId: ctx.userId });
+      return { mfa_enabled: false };
+    });
   }
 
   private tenantsOf(userId: string): Promise<TenantSummary[]> {

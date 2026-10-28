@@ -29,7 +29,11 @@ export type CompanyInfo = {
   retained_earnings_account_id: string | null;
   fx_gain_account_id: string | null;
   fx_loss_account_id: string | null;
+  budget_control: 'NONE' | 'WARN' | 'BLOCK';
+  control_budget_id: string | null;
 };
+
+export type PostWarning = { code: 'BUDGET_EXCEEDED'; params: Record<string, string> };
 
 export type EntryRow = {
   id: string;
@@ -88,7 +92,8 @@ type CostCenterInfo = { id: string; code: string; is_posting: boolean; is_active
 export const loadCompany = async (tx: Tx, companyId: string): Promise<CompanyInfo> =>
   tx.one<CompanyInfo>(
     `SELECT c.id, c.base_currency, cur.minor_units AS base_minor_units, c.require_approval, c.approval_threshold,
-            c.rounding_account_id, c.retained_earnings_account_id, c.fx_gain_account_id, c.fx_loss_account_id
+            c.rounding_account_id, c.retained_earnings_account_id, c.fx_gain_account_id, c.fx_loss_account_id,
+            c.budget_control, c.control_budget_id
      FROM core.companies c JOIN core.currencies cur ON cur.code = c.base_currency WHERE c.id = $1`,
     [companyId],
   );
@@ -193,7 +198,7 @@ export class PostingEngine {
   }
 
   /** Posts a validated-or-not entry; caller has locked it and checked the workflow transition. */
-  async post(tx: Tx, ctx: CompanyContext, company: CompanyInfo, entry: EntryRow, options: PostOptions = {}): Promise<{ entry_no: string }> {
+  async post(tx: Tx, ctx: CompanyContext, company: CompanyInfo, entry: EntryRow, options: PostOptions = {}): Promise<{ entry_no: string; warnings: PostWarning[] }> {
     const period = await this.period(tx, ctx.companyId, entry.period_id);
     await this.fiscal.assertPeriodOpen(tx, period, entry.source_module);
 
@@ -201,6 +206,7 @@ export class PostingEngine {
     await this.validateLines(tx, ctx, entry, lines, options);
     const rounding = this.balance(company, lines, true);
     if (rounding) lines = [...lines, rounding];
+    const warnings = options.systemEntry ? [] : await this.checkBudget(tx, ctx, company, entry, period, lines);
 
     await this.rewriteLines(tx, ctx, entry.id, lines);
 
@@ -230,7 +236,79 @@ export class PostingEngine {
         description: `عكس تلقائي للقيد ${entryNo} / Auto-reversal of ${entryNo}`,
       });
     }
-    return { entry_no: entryNo };
+    return { entry_no: entryNo, warnings };
+  }
+
+  /**
+   * Budget control: year-to-date actual (including this entry) per expense account — per cost
+   * center when the budget is kept by cost center — must not exceed the year-to-date budget.
+   * Unbudgeted accounts are not controlled. WARN returns warnings; BLOCK rejects the posting.
+   */
+  private async checkBudget(tx: Tx, ctx: CompanyContext, company: CompanyInfo, entry: EntryRow, period: PeriodRow, lines: LineRow[]): Promise<PostWarning[]> {
+    if (company.budget_control === 'NONE' || !company.control_budget_id) return [];
+    const budget = await tx.maybeOne<{ fiscal_year_id: string; status: string }>('SELECT fiscal_year_id, status FROM gl.budgets WHERE id = $1', [company.control_budget_id]);
+    if (!budget || budget.status !== 'APPROVED' || budget.fiscal_year_id !== entry.fiscal_year_id) return [];
+
+    const increases = new Map<string, { account_id: string; cost_center_id: string | null; amount: MoneyValue }>();
+    for (const l of lines) {
+      const amount = toMoney(l.debit_base).minus(l.credit_base);
+      if (!amount.isPositive() || amount.isZero()) continue;
+      const key = `${l.account_id}|${l.cost_center_id ?? ''}`;
+      const current = increases.get(key);
+      increases.set(key, { account_id: l.account_id, cost_center_id: l.cost_center_id, amount: (current?.amount ?? new Money(0)).plus(amount) });
+    }
+    if (increases.size === 0) return [];
+
+    const warnings: PostWarning[] = [];
+    const checked = new Set<string>();
+    for (const inc of increases.values()) {
+      const account = await tx.one<{ code: string; account_type: string }>('SELECT code, account_type FROM gl.accounts WHERE id = $1', [inc.account_id]);
+      if (account.account_type !== 'EXPENSE') continue;
+      // Budget kept for this cost center? Otherwise fall back to the account-level budget.
+      const byCostCenter = inc.cost_center_id
+        ? await tx.maybeOne<{ total: string }>(
+            `SELECT sum(l.amount) AS total FROM gl.budget_lines l JOIN gl.fiscal_periods p ON p.id = l.period_id
+             WHERE l.budget_id = $1 AND l.account_id = $2 AND l.cost_center_id = $3 AND p.period_no <= $4 HAVING count(*) > 0`,
+            [company.control_budget_id, inc.account_id, inc.cost_center_id, period.period_no],
+          )
+        : null;
+      const level = byCostCenter ? 'cc' : 'account';
+      const key = level === 'cc' ? `${inc.account_id}|${inc.cost_center_id}` : inc.account_id;
+      if (checked.has(key)) continue;
+      checked.add(key);
+      const budgetRow =
+        byCostCenter ??
+        (await tx.maybeOne<{ total: string }>(
+          `SELECT sum(l.amount) AS total FROM gl.budget_lines l JOIN gl.fiscal_periods p ON p.id = l.period_id
+           WHERE l.budget_id = $1 AND l.account_id = $2 AND p.period_no <= $3 HAVING count(*) > 0`,
+          [company.control_budget_id, inc.account_id, period.period_no],
+        ));
+      if (!budgetRow) continue;
+      const actual = await tx.one<{ net: string }>(
+        `SELECT COALESCE(sum(b.debit_base - b.credit_base), 0) AS net FROM gl.account_balances b JOIN gl.fiscal_periods p ON p.id = b.period_id
+         WHERE b.company_id = $1 AND b.account_id = $2 AND p.fiscal_year_id = $3 AND p.period_no <= $4
+           AND ($5::uuid IS NULL OR b.cost_center_id = $5)`,
+        [ctx.companyId, inc.account_id, entry.fiscal_year_id, period.period_no, level === 'cc' ? inc.cost_center_id : null],
+      );
+      const thisEntry = [...increases.values()]
+        .filter((x) => x.account_id === inc.account_id && (level === 'account' || x.cost_center_id === inc.cost_center_id))
+        .reduce((acc, x) => acc.plus(x.amount), new Money(0));
+      const projected = toMoney(actual.net).plus(thisEntry);
+      if (projected.lessThanOrEqualTo(budgetRow.total)) continue;
+      const ccCode = level === 'cc' ? (await tx.one<{ code: string }>('SELECT code FROM gl.cost_centers WHERE id = $1', [inc.cost_center_id])).code : '';
+      const warning: PostWarning = {
+        code: 'BUDGET_EXCEEDED',
+        params: {
+          account: account.code,
+          costCenter: ccCode ? ` / ${ccCode}` : '',
+          actual: projected.toFixed(company.base_minor_units),
+          budget: toMoney(budgetRow.total).toFixed(company.base_minor_units),
+        },
+      };
+      if (company.budget_control === 'BLOCK') throw new AppError('BUDGET_EXCEEDED', warning.params);
+      warnings.push(warning);
+    }
+    return warnings;
   }
 
   /**

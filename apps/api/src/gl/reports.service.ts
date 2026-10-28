@@ -371,15 +371,12 @@ export class ReportsService {
   // ================================================================ Cost center reports
 
   /** Rows = P&L accounts, columns = child cost centers (each rolled up over its subtree). */
-  costCenterMatrix(ctx: CompanyContext, q: { from_period_id: string; to_period_id: string; parent_cost_center_id?: string; account_scope: 'PL' | 'EXPENSE' | 'REVENUE' }) {
+  costCenterMatrix(ctx: CompanyContext, q: { from_period_id: string; to_period_id: string; parent_cost_center_id?: string; account_scope: 'PL' | 'EXPENSE' | 'REVENUE'; hierarchy_version_id?: string }) {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await this.company(tx, ctx.companyId);
       const [from, to] = await this.periodRange(tx, ctx.companyId, q.from_period_id, q.to_period_id);
       const scope = await scopedCostCenterIds(tx, ctx);
-      const ccs = await tx.query<{ id: string; code: string; name_ar: string; name_en: string; parent_id: string | null }>(
-        'SELECT id, code, name_ar, name_en, parent_id FROM gl.cost_centers WHERE company_id = $1 ORDER BY code',
-        [ctx.companyId],
-      );
+      const ccs = await this.costCenterTree(tx, ctx.companyId, q.hierarchy_version_id);
       let columnsCc = ccs.filter((c) => c.parent_id === (q.parent_cost_center_id ?? null));
       if (q.parent_cost_center_id && columnsCc.length === 0) {
         const self = ccs.find((c) => c.id === q.parent_cost_center_id);
@@ -388,7 +385,7 @@ export class ReportsService {
       }
       const subtree = new Map<string, Set<string>>();
       for (const c of columnsCc) {
-        const ids = await descendantIds(tx, 'gl.cost_centers', ctx.companyId, [c.id]);
+        const ids = subtreeOf(ccs, c.id);
         subtree.set(c.id, new Set(scope ? ids.filter((id) => scope.includes(id)) : ids));
       }
       if (scope) columnsCc = columnsCc.filter((c) => (subtree.get(c.id)?.size ?? 0) > 0);
@@ -462,15 +459,12 @@ export class ReportsService {
   }
 
   /** Rows = cost center hierarchy (rolled up), columns = revenue, expense, net. */
-  costCenterSummary(ctx: CompanyContext, q: { from_period_id: string; to_period_id: string }) {
+  costCenterSummary(ctx: CompanyContext, q: { from_period_id: string; to_period_id: string; hierarchy_version_id?: string }) {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await this.company(tx, ctx.companyId);
       const [from, to] = await this.periodRange(tx, ctx.companyId, q.from_period_id, q.to_period_id);
       const scope = await scopedCostCenterIds(tx, ctx);
-      const ccs = await tx.query<{ id: string; code: string; name_ar: string; name_en: string; parent_id: string | null; is_posting: boolean }>(
-        'SELECT id, code, name_ar, name_en, parent_id, is_posting FROM gl.cost_centers WHERE company_id = $1 ORDER BY code',
-        [ctx.companyId],
-      );
+      const ccs = await this.costCenterTree(tx, ctx.companyId, q.hierarchy_version_id);
       const data = await tx.query<{ cost_center_id: string; account_type: AccountType; debit: string; credit: string }>(
         `SELECT b.cost_center_id, a.account_type, sum(b.debit_base) AS debit, sum(b.credit_base) AS credit
          FROM ${OPERATING_BALANCES} b JOIN gl.fiscal_periods p ON p.id = b.period_id JOIN gl.accounts a ON a.id = b.account_id
@@ -790,6 +784,27 @@ export class ReportsService {
     return allowed;
   }
 
+  /** Cost centers with their parents from the current hierarchy or from a saved hierarchy version. */
+  async costCenterTree(tx: Tx, companyId: string, versionId?: string) {
+    const ccs = await tx.query<{ id: string; code: string; name_ar: string; name_en: string; parent_id: string | null; is_posting: boolean }>(
+      'SELECT id, code, name_ar, name_en, parent_id, is_posting FROM gl.cost_centers WHERE company_id = $1 ORDER BY code',
+      [companyId],
+    );
+    if (!versionId) return ccs;
+    const nodes = await tx.query<{ cost_center_id: string; parent_id: string | null }>(
+      'SELECT cost_center_id, parent_id FROM gl.cost_center_version_nodes WHERE company_id = $1 AND version_id = $2',
+      [companyId, versionId],
+    );
+    if (!nodes.length) throw notFound('hierarchy version');
+    const parents = new Map(nodes.map((n) => [n.cost_center_id, n.parent_id]));
+    const known = new Set(ccs.map((c) => c.id));
+    // Cost centers created after the snapshot appear at the top level.
+    return ccs.map((c) => {
+      const parent = parents.get(c.id);
+      return { ...c, parent_id: parent && known.has(parent) ? parent : null, is_posting: c.is_posting || !ccs.some((x) => parents.get(x.id) === c.id) };
+    });
+  }
+
   async costCenterSubtitle(tx: Tx, companyId: string, costCenterId?: string): Promise<BilingualText[]> {
     if (!costCenterId) return [];
     const cc = await tx.maybeOne<{ code: string; name_ar: string; name_en: string }>('SELECT code, name_ar, name_en FROM gl.cost_centers WHERE company_id = $1 AND id = $2', [companyId, costCenterId]);
@@ -871,3 +886,12 @@ export class AccountTree {
     }
   }
 }
+
+/** Ids of a node and all its descendants in an in-memory hierarchy. */
+const subtreeOf = (nodes: { id: string; parent_id: string | null }[], rootId: string): string[] => {
+  const result = [rootId];
+  for (let i = 0; i < result.length; i++) {
+    for (const n of nodes) if (n.parent_id === result[i]) result.push(n.id);
+  }
+  return result;
+};

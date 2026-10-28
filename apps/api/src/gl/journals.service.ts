@@ -8,6 +8,7 @@ import type { CompanyContext } from '../common/request-context';
 import { DbService, type Tx } from '../db/db.service';
 import { scopedCostCenterIds } from './cost-centers.service';
 import { FiscalService } from './fiscal.service';
+import { IntercompanyService } from './intercompany.service';
 import { type CompanyInfo, type EntryRow, loadCompany, PostingEngine } from './posting.engine';
 
 type ListQuery = z.infer<typeof journalListQuerySchema>;
@@ -19,6 +20,7 @@ export class JournalsService {
     private readonly fiscal: FiscalService,
     private readonly engine: PostingEngine,
     private readonly audit: AuditService,
+    private readonly intercompany: IntercompanyService,
   ) {}
 
   list(ctx: CompanyContext, query: ListQuery) {
@@ -179,7 +181,8 @@ export class JournalsService {
       if (company.require_approval && entry.status !== 'APPROVED' && !(await this.belowThreshold(tx, company, id))) {
         throw new AppError('JOURNAL_APPROVAL_REQUIRED');
       }
-      await this.engine.post(tx, ctx, company, entry);
+      const result = await this.engine.post(tx, ctx, company, entry);
+      return { warnings: result.warnings };
     });
   }
 
@@ -188,6 +191,7 @@ export class JournalsService {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await loadCompany(tx, ctx.companyId);
       const reversalId = await this.engine.reverse(tx, ctx, company, id, { date: input.reversal_date, description: input.description });
+      await this.intercompany.reverseCounterpart(tx, ctx, id, input.reversal_date);
       return this.load(tx, ctx, reversalId);
     });
   }
@@ -258,18 +262,18 @@ export class JournalsService {
     id: string,
     action: 'submit' | 'approve' | 'reject' | 'post',
     allowed: string[],
-    apply: (tx: Tx, entry: EntryRow, company: CompanyInfo) => Promise<void>,
+    apply: (tx: Tx, entry: EntryRow, company: CompanyInfo) => Promise<Record<string, unknown> | void>,
   ) {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await loadCompany(tx, ctx.companyId);
       const entry = await this.engine.lockEntry(tx, ctx.companyId, id);
       if (!allowed.includes(entry.status)) throw new AppError('JOURNAL_INVALID_TRANSITION', { action, status: entry.status });
       if (entry.source_module !== 'GL' && action !== 'post') throw new AppError('JOURNAL_INVALID_TRANSITION', { action, status: entry.status });
-      await apply(tx, entry, company);
+      const extra = await apply(tx, entry, company);
       if (action !== 'post') {
         await this.audit.record(tx, ctx, { action, entityType: 'journal_entry', entityId: id, companyId: ctx.companyId, oldData: { status: entry.status } });
       }
-      return this.load(tx, ctx, id);
+      return { ...(await this.load(tx, ctx, id)), ...(extra ?? {}) };
     });
   }
 

@@ -71,10 +71,14 @@ export class AdminService {
           throw new AppError('VALIDATION_FAILED', {}, [{ path: 'rounding_account_id', message: 'Must be an active posting account' }]);
         }
       }
+      if (input.control_budget_id) {
+        const budget = await tx.maybeOne('SELECT 1 FROM gl.budgets WHERE company_id = $1 AND id = $2', [id, input.control_budget_id]);
+        if (!budget) throw notFound('budget');
+      }
       const row = await tx.one(
         `UPDATE core.companies SET code = $2, name_ar = $3, name_en = $4, base_currency = $5, commercial_reg_no = $6, tax_no = $7,
            fiscal_year_start_month = $8, require_approval = $9, rounding_account_id = $10, retained_earnings_account_id = $11, is_active = $12,
-           fx_gain_account_id = $13, fx_loss_account_id = $14, approval_threshold = $15
+           fx_gain_account_id = $13, fx_loss_account_id = $14, approval_threshold = $15, budget_control = $16, control_budget_id = $17
          WHERE id = $1 RETURNING *`,
         [
           id,
@@ -92,6 +96,8 @@ export class AdminService {
           input.fx_gain_account_id ?? null,
           input.fx_loss_account_id ?? null,
           input.approval_threshold ?? null,
+          input.budget_control,
+          input.control_budget_id ?? null,
         ],
       );
       await this.audit.record(tx, ctx, { action: 'update', entityType: 'company', entityId: id, companyId: id, oldData: existing, newData: input });
@@ -104,7 +110,7 @@ export class AdminService {
   listMembers(ctx: RequestContext) {
     return this.db.withTenant(ctx, (tx) =>
       tx.query(
-        `SELECT u.id AS user_id, u.email, u.full_name, u.last_login_at, tu.is_active, tu.role_id, tu.cost_center_scope,
+        `SELECT u.id AS user_id, u.email, u.full_name, u.last_login_at, u.mfa_enabled, tu.is_active, tu.role_id, tu.cost_center_scope,
                 r.code AS role_code, r.name_ar AS role_name_ar, r.name_en AS role_name_en
          FROM core.tenant_users tu JOIN core.users u ON u.id = tu.user_id JOIN core.roles r ON r.id = tu.role_id
          ORDER BY u.full_name`,
@@ -162,6 +168,42 @@ export class AdminService {
       );
       await this.audit.record(tx, ctx, { action: 'update_membership', entityType: 'user', entityId: userId, oldData: existing, newData: input });
       return row;
+    });
+  }
+
+  resetMfa(ctx: RequestContext, userId: string) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const row = await tx.one<{ reset: boolean | null }>('SELECT core.reset_member_mfa($1) AS reset', [userId]);
+      if (!row.reset) throw notFound('user');
+      await this.audit.record(tx, ctx, { action: 'mfa_reset', entityType: 'user', entityId: userId });
+      return { mfa_enabled: false };
+    });
+  }
+
+  /**
+   * Full data export of the current tenant (GDPR-style portability and per-tenant backup).
+   * Password hashes and MFA secrets are never included.
+   */
+  exportTenant(ctx: RequestContext) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const tables = [
+        'core.tenants', 'core.companies', 'core.roles', 'core.tenant_users', 'core.audit_log',
+        'gl.fiscal_years', 'gl.fiscal_periods', 'gl.period_statuses', 'gl.cost_centers', 'gl.cost_center_versions', 'gl.cost_center_version_nodes',
+        'gl.dimension_types', 'gl.dimension_values', 'gl.accounts', 'gl.account_cost_centers', 'gl.account_dimension_rules',
+        'gl.exchange_rates', 'gl.journal_types', 'gl.distribution_templates', 'gl.distribution_template_lines',
+        'gl.journal_entries', 'gl.journal_lines', 'gl.journal_line_dimensions', 'gl.attachments', 'gl.number_sequences',
+        'gl.recurring_entries', 'gl.statistical_drivers', 'gl.driver_values', 'gl.allocation_rules', 'gl.allocation_targets', 'gl.allocation_runs',
+        'gl.budgets', 'gl.budget_lines', 'gl.appropriation_rules', 'gl.statements', 'gl.statement_rows',
+        'gl.intercompany_partners', 'gl.intercompany_links', 'gl.consolidation_groups', 'gl.consolidation_members', 'gl.consolidation_adjustments',
+      ];
+      const data: Record<string, unknown[]> = {};
+      for (const table of tables) data[table] = await tx.query(`SELECT * FROM ${table}`);
+      data['core.users'] = await tx.query(
+        `SELECT u.id, u.email, u.full_name, u.preferred_locale, u.digit_style, u.mfa_enabled, u.created_at
+         FROM core.users u JOIN core.tenant_users tu ON tu.user_id = u.id`,
+      );
+      await this.audit.record(tx, ctx, { action: 'export', entityType: 'tenant', entityId: ctx.tenantId });
+      return { format: 'erp-tenant-export', version: 1, exported_at: new Date().toISOString(), tenant_id: ctx.tenantId, data };
     });
   }
 

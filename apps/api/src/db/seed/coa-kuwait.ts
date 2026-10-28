@@ -199,6 +199,7 @@ export const DEFAULT_JOURNAL_TYPES: { code: string; ar: string; en: string; syst
   { code: 'CLS', ar: 'قيد إقفال', en: 'Year-end closing', system: true, module: 'GL' },
   { code: 'FXR', ar: 'إعادة تقييم العملات', en: 'FX revaluation', system: true, module: 'GL' },
   { code: 'ALC', ar: 'قيد توزيع التكاليف', en: 'Cost allocation', system: true, module: 'GL' },
+  { code: 'IC', ar: 'قيود بين الشركات', en: 'Intercompany', system: true, module: 'GL' },
   { code: 'AP', ar: 'قيود الموردين', en: 'Payables postings', system: true, module: 'AP' },
   { code: 'AR', ar: 'قيود العملاء', en: 'Receivables postings', system: true, module: 'AR' },
   { code: 'INV', ar: 'قيود المخزون', en: 'Inventory postings', system: true, module: 'INV' },

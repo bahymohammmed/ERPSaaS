@@ -1,11 +1,14 @@
 import type { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
+import { rateLimitMiddleware } from './common/rate-limit';
 import { config } from './config';
 
 /** Shared HTTP setup for the server and the e2e tests. */
 export const configureApp = (app: INestApplication): void => {
   app.setGlobalPrefix('api');
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  app.use(rateLimitMiddleware());
   app.use(cookieParser());
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -14,5 +17,4 @@ export const configureApp = (app: INestApplication): void => {
     next();
   });
   app.enableCors({ origin: config.corsOrigin.split(','), credentials: true });
-  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 };

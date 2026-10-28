@@ -140,6 +140,74 @@ export class AnalysisReportsService {
     });
   }
 
+  // ================================================================ Cash flow (indirect)
+
+  /**
+   * Indirect method: profit for the period, adjusted by the movement of every non-cash balance
+   * sheet account, grouped by the account's cash-flow category (uncategorised accounts count as
+   * operating, which covers non-cash items such as depreciation). Year-end closing entries are
+   * excluded, so the statement always reconciles to the movement in cash.
+   */
+  cashFlow(ctx: CompanyContext, q: { from_period_id: string; to_period_id: string }) {
+    return this.db.withTenant(ctx, async (tx) => {
+      if (ctx.costCenterScope) throw new AppError('OUT_OF_SCOPE');
+      const company = await this.reports.company(tx, ctx.companyId);
+      const [from, to] = await this.reports.periodRange(tx, ctx.companyId, q.from_period_id, q.to_period_id);
+      const accounts = await tx.query<Account & { cash_flow_category: 'CASH' | 'OPERATING' | 'INVESTING' | 'FINANCING' | null }>(
+        `SELECT id, code, name_ar, name_en, parent_id, is_posting, account_type, normal_balance, cash_flow_category
+         FROM gl.accounts WHERE company_id = $1 AND is_posting ORDER BY code`,
+        [ctx.companyId],
+      );
+      const movement = await this.reports.sums(tx, ctx.companyId, `${periodKeyAtLeast('p', 2)} AND ${periodKeyAtMost('p', 4)}`, [from.start_date, from.period_no, to.start_date, to.period_no], null, true);
+      const before = await this.reports.sums(tx, ctx.companyId, `(p.start_date, p.period_no) < ($2::date, $3::int)`, [from.start_date, from.period_no], null);
+      const minor = company.minor_units;
+      const inflow = (id: string) => net(movement.get(id), 'CREDIT');
+
+      const profit = accounts.filter((a) => isProfitAndLoss(a.account_type)).reduce((acc, a) => acc.plus(inflow(a.id)), new Money(0));
+      const cashAccounts = accounts.filter((a) => a.cash_flow_category === 'CASH');
+      const openingCash = cashAccounts.reduce((acc, a) => acc.plus(net(before.get(a.id), 'DEBIT')), new Money(0));
+      const cashMovement = cashAccounts.reduce((acc, a) => acc.plus(net(movement.get(a.id), 'DEBIT')), new Money(0));
+
+      const columns: ReportColumn[] = [
+        { key: 'name', label: t('البيان', 'Line item'), kind: 'bilingual', width: 55 },
+        { key: 'amount', label: t('المبلغ', 'Amount'), kind: 'amount' },
+      ];
+      const rows: ReportRow[] = [];
+      const section = (category: 'OPERATING' | 'INVESTING' | 'FINANCING', title: BilingualText, total: BilingualText, start: MoneyValue) => {
+        rows.push({ cells: { name: title }, style: 'section' });
+        let sum = start;
+        if (category === 'OPERATING') rows.push({ cells: { name: t('ربح الفترة', 'Profit for the period'), amount: profit.toFixed(minor) }, level: 1 });
+        for (const a of accounts) {
+          if (isProfitAndLoss(a.account_type) || a.cash_flow_category === 'CASH') continue;
+          if ((a.cash_flow_category ?? 'OPERATING') !== category) continue;
+          const value = inflow(a.id);
+          if (value.isZero()) continue;
+          sum = sum.plus(value);
+          rows.push({ cells: { name: t(`التغير في ${a.name_ar}`, `Change in ${a.name_en}`), amount: value.toFixed(minor) }, level: 1, drill: { kind: 'account', id: a.id } });
+        }
+        rows.push({ cells: { name: total, amount: sum.toFixed(minor) }, style: 'subtotal' });
+        return sum;
+      };
+      const operating = section('OPERATING', t('التدفقات النقدية من الأنشطة التشغيلية', 'Cash flows from operating activities'), t('صافي النقد من الأنشطة التشغيلية', 'Net cash from operating activities'), profit);
+      const investing = section('INVESTING', t('التدفقات النقدية من الأنشطة الاستثمارية', 'Cash flows from investing activities'), t('صافي النقد من الأنشطة الاستثمارية', 'Net cash from investing activities'), new Money(0));
+      const financing = section('FINANCING', t('التدفقات النقدية من الأنشطة التمويلية', 'Cash flows from financing activities'), t('صافي النقد من الأنشطة التمويلية', 'Net cash from financing activities'), new Money(0));
+      const change = operating.plus(investing).plus(financing);
+      rows.push({ cells: { name: t('صافي التغير في النقد وما في حكمه', 'Net change in cash and cash equivalents'), amount: change.toFixed(minor) }, style: 'subtotal' });
+      rows.push({ cells: { name: t('النقد وما في حكمه في بداية الفترة', 'Cash and cash equivalents at the beginning of the period'), amount: openingCash.toFixed(minor) } });
+      rows.push({ cells: { name: t('النقد وما في حكمه في نهاية الفترة', 'Cash and cash equivalents at the end of the period'), amount: openingCash.plus(change).toFixed(minor) }, style: 'grandTotal' });
+
+      const reconciles = change.equals(cashMovement);
+      return this.reports.document('cash-flow', t('بيان التدفقات النقدية', 'Statement of cash flows'), company, columns, rows, [
+        t(`من ${from.name_ar} إلى ${to.name_ar}`, `From ${from.name_en} to ${to.name_en}`),
+      ], [
+        reconciles
+          ? t('يتطابق مع حركة حسابات النقد', 'Agrees with the movement in cash accounts')
+          : t(`تحذير: حركة حسابات النقد ${cashMovement.toFixed(minor)}`, `Warning: cash accounts moved by ${cashMovement.toFixed(minor)}`),
+        t('الطريقة غير المباشرة؛ الحسابات غير المصنفة تعامل كأنشطة تشغيلية', 'Indirect method; uncategorised accounts are treated as operating'),
+      ]);
+    });
+  }
+
   // ================================================================ Designed statements
 
   listStatements(ctx: CompanyContext) {

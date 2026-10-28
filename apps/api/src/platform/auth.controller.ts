@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from '@nestjs/common';
-import { loginSchema, type LoginInput, signupSchema, type SignupInput, switchTenantSchema, userPreferencesSchema } from '@erp/shared';
+import { loginSchema, type LoginInput, mfaCodeSchema, signupSchema, type SignupInput, switchTenantSchema, userPreferencesSchema } from '@erp/shared';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import { AUTH_COOKIE } from '../common/auth.guard';
@@ -48,6 +48,24 @@ export class AuthController {
   @Patch('preferences')
   preferences(@Ctx() ctx: RequestContext, @Body(new ZodPipe(userPreferencesSchema)) body: z.infer<typeof userPreferencesSchema>) {
     return this.auth.updatePreferences(ctx, body);
+  }
+
+  @Post('mfa/setup')
+  @HttpCode(200)
+  setupMfa(@Ctx() ctx: RequestContext) {
+    return this.auth.setupMfa(ctx);
+  }
+
+  @Post('mfa/enable')
+  @HttpCode(200)
+  enableMfa(@Ctx() ctx: RequestContext, @Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>) {
+    return this.auth.enableMfa(ctx, body.code);
+  }
+
+  @Post('mfa/disable')
+  @HttpCode(200)
+  disableMfa(@Ctx() ctx: RequestContext, @Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>) {
+    return this.auth.disableMfa(ctx, body.code);
   }
 
   /** Browser clients use the httpOnly cookie; API clients use the returned bearer token. */

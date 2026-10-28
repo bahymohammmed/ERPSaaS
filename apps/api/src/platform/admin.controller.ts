@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { companySchema, inviteUserSchema, roleSchema, updateMembershipSchema } from '@erp/shared';
 import { z } from 'zod';
 import { Ctx, RequirePermissions } from '../common/decorators';
@@ -55,6 +56,12 @@ export class AdminController {
     return this.admin.updateMember(ctx, userId, parse(updateMembershipSchema, body));
   }
 
+  @Post('users/:userId/mfa-reset')
+  @RequirePermissions('admin.users')
+  resetMfa(@Ctx() ctx: RequestContext, @Param('userId', ParseUUIDPipe) userId: string) {
+    return this.admin.resetMfa(ctx, userId);
+  }
+
   @Get('roles')
   roles(@Ctx() ctx: RequestContext) {
     return this.admin.listRoles(ctx);
@@ -70,6 +77,14 @@ export class AdminController {
   @RequirePermissions('admin.users')
   updateRole(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
     return this.admin.saveRole(ctx, parse(roleSchema, body), id);
+  }
+
+  @Get('export')
+  @RequirePermissions('admin.tenant')
+  async export(@Ctx() ctx: RequestContext, @Res() res: Response) {
+    const data = await this.admin.exportTenant(ctx);
+    res.setHeader('Content-Disposition', `attachment; filename="tenant-export-${data.exported_at.slice(0, 10)}.json"`);
+    res.json(data);
   }
 
   @Get('audit')

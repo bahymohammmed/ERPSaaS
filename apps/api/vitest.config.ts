@@ -14,6 +14,7 @@ export default defineConfig({
       MIGRATION_DATABASE_URL: process.env.TEST_MIGRATION_DATABASE_URL ?? 'postgres://erp_owner:erp_owner_dev@localhost:5432/erp_test',
       JWT_SECRET: 'test-secret',
       RECURRING_SCHEDULER: 'off',
+      RATE_LIMIT: 'off',
       STORAGE_DIR: './storage-test',
     },
   },

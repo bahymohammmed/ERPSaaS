@@ -2,6 +2,7 @@ import { Controller, Get, Param, ParseUUIDPipe, Query, Res } from '@nestjs/commo
 import {
   balanceSheetQuerySchema,
   budgetVsActualQuerySchema,
+  cashFlowQuerySchema,
   costCenterReportQuerySchema,
   costCenterSummaryQuerySchema,
   type DigitStyle,
@@ -38,6 +39,12 @@ export class ReportsController {
   async budgetVsActual(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown, @Res() res: Response) {
     const q = parse(budgetVsActualQuerySchema, query);
     await this.send(res, q, await this.analysis.budgetVsActual(ctx, q));
+  }
+
+  @Get('cash-flow')
+  async cashFlow(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(cashFlowQuerySchema, query);
+    await this.send(res, q, await this.analysis.cashFlow(ctx, q));
   }
 
   @Get('statement')

@@ -74,6 +74,13 @@ export const ERROR_MESSAGES = {
   STATEMENT_FORMULA: { en: 'Row {row}: unknown reference {ref} in formula', ar: 'السطر {row}: مرجع غير معروف {ref} في المعادلة' },
   IMPORT_FILE_INVALID: { en: 'The file could not be read: {reason}', ar: 'تعذرت قراءة الملف: {reason}' },
   IMPORT_HAS_ERRORS: { en: 'The file has {count} rows with errors; nothing was imported', ar: 'الملف يحتوي على {count} أسطر بها أخطاء؛ لم يتم استيراد شيء' },
+  BUDGET_EXCEEDED: { en: 'Account {account}{costCenter}: year-to-date {actual} exceeds the budget of {budget}', ar: 'الحساب {account}{costCenter}: الفعلي حتى تاريخه {actual} يتجاوز الموازنة {budget}' },
+  IC_PARTNER_MISSING: { en: 'Set up intercompany accounts between {company} and {partner} first', ar: 'حدد حسابات التعامل بين {company} و{partner} أولاً' },
+  IC_UNBALANCED: { en: 'The two sides do not match: {source} vs {target}', ar: 'طرفا العملية غير متطابقين: {source} مقابل {target}' },
+  IC_CURRENCY_MISMATCH: { en: 'Both companies must share the same base currency', ar: 'يجب أن تكون للشركتين نفس العملة الأساسية' },
+  MFA_REQUIRED: { en: 'Enter the code from your authenticator app', ar: 'أدخل الرمز من تطبيق المصادقة' },
+  MFA_INVALID: { en: 'The verification code is not valid', ar: 'رمز التحقق غير صحيح' },
+  RATE_LIMITED: { en: 'Too many requests; try again shortly', ar: 'طلبات كثيرة جداً؛ حاول مرة أخرى بعد قليل' },
   OUT_OF_SCOPE: { en: 'This record is outside your cost center access', ar: 'هذا السجل خارج صلاحيات مراكز التكلفة الخاصة بك' },
   INTERNAL: { en: 'Unexpected error', ar: 'حدث خطأ غير متوقع' },
 } as const satisfies Record<string, { en: string; ar: string }>;

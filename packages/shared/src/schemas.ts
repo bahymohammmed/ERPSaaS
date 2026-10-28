@@ -59,6 +59,7 @@ export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
   tenantId: uuidSchema.optional(),
+  otp: z.string().trim().regex(/^\d{6}$/).optional(),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
@@ -84,6 +85,8 @@ export const companySchema = z
     fx_gain_account_id: uuidSchema.nullish(),
     fx_loss_account_id: uuidSchema.nullish(),
     approval_threshold: amountSchema.nullish(),
+    budget_control: z.enum(['NONE', 'WARN', 'BLOCK']).default('NONE'),
+    control_budget_id: uuidSchema.nullish(),
     is_active: z.boolean().default(true),
   })
   .refine(requireOneName, nameIssue);
@@ -315,12 +318,14 @@ export const costCenterReportQuerySchema = z.object({
   to_period_id: uuidSchema,
   parent_cost_center_id: uuidSchema.optional(),
   account_scope: z.enum(['PL', 'EXPENSE', 'REVENUE']).default('PL'),
+  hierarchy_version_id: uuidSchema.optional(),
   ...reportFormat,
 });
 
 export const costCenterSummaryQuerySchema = z.object({
   from_period_id: uuidSchema,
   to_period_id: uuidSchema,
+  hierarchy_version_id: uuidSchema.optional(),
   ...reportFormat,
 });
 
@@ -490,3 +495,68 @@ export const statementQuerySchema = z.object({
 });
 
 export const voucherQuerySchema = z.object({ ...reportFormat });
+
+// ---------- Phase 3 ----------
+
+export const cashFlowQuerySchema = z.object({
+  from_period_id: uuidSchema,
+  to_period_id: uuidSchema,
+  ...reportFormat,
+});
+
+export const intercompanyPartnerSchema = z.object({
+  partner_company_id: uuidSchema,
+  due_from_account_id: uuidSchema,
+  due_to_account_id: uuidSchema,
+});
+
+const icLineSchema = z.object({
+  account_id: uuidSchema,
+  cost_center_id: uuidSchema.nullish(),
+  description: z.string().trim().max(500).nullish(),
+  debit: amountSchema.default('0'),
+  credit: amountSchema.default('0'),
+});
+
+/** One business event booked in two companies; each side is balanced by its intercompany account. */
+export const intercompanyTransactionSchema = z.object({
+  target_company_id: uuidSchema,
+  entry_date: dateSchema,
+  description: z.string().trim().max(1000).nullish(),
+  reference: z.string().trim().max(100).nullish(),
+  source_lines: z.array(icLineSchema).min(1).max(500),
+  target_lines: z.array(icLineSchema).min(1).max(500),
+});
+export type IntercompanyTransactionInput = z.infer<typeof intercompanyTransactionSchema>;
+
+export const intercompanyReconciliationQuerySchema = z.object({ as_of: dateSchema, ...reportFormat });
+
+export const consolidationGroupSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    parent_company_id: uuidSchema,
+    presentation_currency: currencyCodeSchema,
+    member_company_ids: z.array(uuidSchema).min(1),
+    is_active: z.boolean().default(true),
+  })
+  .refine(requireOneName, nameIssue);
+export type ConsolidationGroupInput = z.infer<typeof consolidationGroupSchema>;
+
+export const consolidationAdjustmentSchema = z.object({
+  adjustment_date: dateSchema,
+  description: z.string().trim().max(500).default(''),
+  lines: z
+    .array(z.object({ account_code: z.string().trim().min(1).max(30), debit: amountSchema.default('0'), credit: amountSchema.default('0') }))
+    .min(2)
+    .max(200),
+});
+
+export const consolidatedRangeQuerySchema = z.object({ from: dateSchema, to: dateSchema, ...reportFormat });
+export const consolidatedPositionQuerySchema = z.object({ as_of: dateSchema, ...reportFormat });
+
+export const costCenterVersionSchema = z
+  .object({ code: codeSchema, ...bilingualNames, effective_date: dateSchema })
+  .refine(requireOneName, nameIssue);
+
+export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });

@@ -10,6 +10,9 @@ import { AccountsService } from './gl/accounts.service';
 import { AllocationService } from './gl/allocation.service';
 import { AnalysisReportsService } from './gl/analysis-reports.service';
 import { BudgetsService } from './gl/budgets.service';
+import { ConsolidationService } from './gl/consolidation.service';
+import { IntercompanyService } from './gl/intercompany.service';
+import { ConsolidationController, Phase3CompanyController } from './gl/phase3.controller';
 import { FxRevaluationService } from './gl/fx-revaluation.service';
 import { ImportService } from './gl/import.service';
 import { Phase2Controller } from './gl/phase2.controller';
@@ -45,7 +48,7 @@ class HealthController {
 }
 
 @Module({
-  controllers: [HealthController, AuthController, AdminController, MasterDataController, JournalsController, ReportsController, Phase2Controller],
+  controllers: [HealthController, AuthController, AdminController, MasterDataController, JournalsController, ReportsController, Phase2Controller, Phase3CompanyController, ConsolidationController],
   providers: [
     DbService,
     TokenService,
@@ -70,6 +73,8 @@ class HealthController {
     YearEndService,
     AnalysisReportsService,
     ImportService,
+    IntercompanyService,
+    ConsolidationService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

@@ -97,6 +97,43 @@ export class CostCentersService {
     });
   }
 
+  listVersions(ctx: CompanyContext) {
+    return this.db.withTenant(ctx, (tx) =>
+      tx.query(
+        `SELECT v.*, (SELECT count(*)::int FROM gl.cost_center_version_nodes n WHERE n.version_id = v.id) AS nodes
+         FROM gl.cost_center_versions v WHERE v.company_id = $1 ORDER BY v.effective_date DESC`,
+        [ctx.companyId],
+      ),
+    );
+  }
+
+  /** Saves the current hierarchy so reports can later be run on this structure. */
+  createVersion(ctx: CompanyContext, input: { code: string; name_ar: string; name_en: string; effective_date: string }) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const version = await tx.one<{ id: string }>(
+        `INSERT INTO gl.cost_center_versions (tenant_id, company_id, code, name_ar, name_en, effective_date, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [ctx.tenantId, ctx.companyId, input.code, input.name_ar || input.name_en, input.name_en || input.name_ar, input.effective_date, ctx.userId],
+      );
+      await tx.query(
+        `INSERT INTO gl.cost_center_version_nodes (tenant_id, company_id, version_id, cost_center_id, parent_id)
+         SELECT tenant_id, company_id, $2, id, parent_id FROM gl.cost_centers WHERE company_id = $1`,
+        [ctx.companyId, version.id],
+      );
+      await this.audit.record(tx, ctx, { action: 'create', entityType: 'cost_center_version', entityId: version.id, companyId: ctx.companyId, newData: input });
+      return version;
+    });
+  }
+
+  removeVersion(ctx: CompanyContext, id: string) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const rows = await tx.query('DELETE FROM gl.cost_center_versions WHERE company_id = $1 AND id = $2 RETURNING code', [ctx.companyId, id]);
+      if (!rows.length) throw notFound('hierarchy version');
+      await this.audit.record(tx, ctx, { action: 'delete', entityType: 'cost_center_version', entityId: id, companyId: ctx.companyId, oldData: rows[0] });
+      return { deleted: true };
+    });
+  }
+
   private async hasTransactions(tx: Tx, companyId: string, id: string): Promise<boolean> {
     return !!(await tx.maybeOne('SELECT 1 FROM gl.journal_lines WHERE company_id = $1 AND cost_center_id = $2 LIMIT 1', [companyId, id]));
   }
