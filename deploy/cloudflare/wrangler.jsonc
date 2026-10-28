@@ -1,0 +1,26 @@
+// Cloudflare deployment: a Worker in front of one container running the API and the web app.
+// Secrets (set with `wrangler secret put`, or by the GitHub workflow): DATABASE_URL, JWT_SECRET, MFA_ENCRYPTION_KEY.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "erp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "ErpContainer",
+      "image": "../../Dockerfile",
+      "image_build_context": "../..",
+      // 1/2 vCPU, 4 GiB memory, 8 GB disk: Chromium for PDF reports needs the memory.
+      "instance_type": "standard-1",
+      // One instance: the rate limiter and the recurring-entry scheduler keep state in process.
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "ERP", "class_name": "ErpContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ErpContainer"] }],
+  // Hourly wake-up so recurring entries are generated even when nobody is signed in.
+  "triggers": { "crons": ["7 * * * *"] }
+}

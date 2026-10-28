@@ -35,9 +35,12 @@ const AUTH_PATHS = /^\/api\/auth\/(login|signup|mfa\/)/;
 export const rateLimitMiddleware = () => {
   const auth = new RateLimiter(Number(process.env.RATE_LIMIT_AUTH ?? 20), 60_000);
   const general = new RateLimiter(Number(process.env.RATE_LIMIT_GENERAL ?? 1200), 60_000);
+  // Behind a trusted edge (the Cloudflare Worker) the client address arrives in this header.
+  const ipHeader = process.env.CLIENT_IP_HEADER?.toLowerCase();
   return (req: Request, res: Response, next: NextFunction) => {
     if (process.env.RATE_LIMIT === 'off') return next();
-    const ip = req.ip ?? 'unknown';
+    const forwarded = ipHeader ? req.headers[ipHeader] : undefined;
+    const ip = (typeof forwarded === 'string' && forwarded) || req.ip || 'unknown';
     const wait = AUTH_PATHS.test(req.path) ? auth.take(`auth:${ip}`) : general.take(`api:${ip}`);
     if (wait === null) return next();
     res.setHeader('Retry-After', String(wait));

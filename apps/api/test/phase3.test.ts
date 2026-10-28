@@ -3,6 +3,7 @@ import { toMoney } from '@erp/shared';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totp } from '../src/common/totp';
+import { config } from '../src/config';
 import { client, createApp, type Fixture, line, postEntry, signupTenant } from './helpers';
 
 type Row = { cells: Record<string, string | { ar: string; en: string } | null>; style?: string };
@@ -258,5 +259,34 @@ describe('security', () => {
     const text = JSON.stringify(res.body);
     expect(text).not.toContain('password_hash');
     expect(text).not.toContain('mfa_secret');
+  });
+});
+
+describe('attachment storage', () => {
+  it('stores files on disk or in the database and serves both', async () => {
+    const a = f.accounts;
+    const draft = await f.api.post('/gl/journals', { journal_type_id: f.journalTypes.JV, entry_date: '2026-05-05', lines: [line(a['5201']!, '1.000', '0', { cost_center_id: f.costCenters['101'] }), line(a['110103']!, '0', '1.000')] });
+    expect(draft.status).toBe(201);
+    const upload = async (mode: 'disk' | 'database', text: string) => {
+      config.attachmentStorage = mode;
+      const res = await f.api.post(`/gl/journals/${draft.body.id}/attachments`).attach('file', Buffer.from(text), { filename: `${mode}.csv`, contentType: 'text/csv' });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+    try {
+      const onDisk = await upload('disk', 'a,b\n1,2\n');
+      const inDb = await upload('database', 'x,y\n3,4\n');
+      const read = (id: string) => f.api.get(`/gl/attachments/${id}`).buffer(true).parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks).toString()));
+      });
+      expect((await read(onDisk)).body).toBe('a,b\n1,2\n');
+      expect((await read(inDb)).body).toBe('x,y\n3,4\n');
+      expect((await f.api.delete(`/gl/attachments/${inDb}`)).status).toBe(200);
+      expect((await f.api.get(`/gl/attachments/${inDb}`)).status).toBe(404);
+    } finally {
+      config.attachmentStorage = 'disk';
+    }
   });
 });

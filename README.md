@@ -37,6 +37,10 @@ Tests run against a real PostgreSQL database (`erp_test`). That database is rebu
 pnpm test
 ```
 
+## Deployment
+
+Cloudflare (Workers + Containers, with a managed PostgreSQL): see [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md). The `Dockerfile` at the root builds one image containing the API, the web app and Chromium, and runs on any container host.
+
 ## Repository layout
 
 ```
@@ -217,7 +221,7 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 
 - OIDC/SSO.
 - Email delivery of invitations (a temporary password is shown once to the administrator).
-- Object storage for attachments (local disk today).
+- Object storage for attachments (local disk, or the database with `ATTACHMENT_STORAGE=database`).
 - Dedicated-database tenants and per-tenant restore.
 - Automatic elimination of intra-group revenue and expense (only balances are eliminated; use manual adjustments).
 - Non-controlling interests and partial ownership.

@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.next
+**/*.tsbuildinfo
+**/storage
+**/storage-test
+.git
+.env
+deploy/cloudflare
+docs

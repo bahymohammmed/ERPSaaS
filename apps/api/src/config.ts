@@ -14,6 +14,8 @@ export const config = {
   port: Number(process.env.PORT ?? 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
   storageDir: process.env.STORAGE_DIR ?? './storage',
+  /** 'disk' (under storageDir) or 'database' (gl.attachment_contents) for hosts without a persistent disk. */
+  attachmentStorage: (process.env.ATTACHMENT_STORAGE === 'database' ? 'database' : 'disk') as 'disk' | 'database',
   chromiumPath: process.env.CHROMIUM_PATH || undefined,
   secureCookies: process.env.NODE_ENV === 'production',
 };

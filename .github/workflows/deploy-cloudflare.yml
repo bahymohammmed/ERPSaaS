@@ -1,0 +1,88 @@
+# Tests, migrates the production database, and deploys to Cloudflare Containers.
+# Repository secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, DATABASE_URL,
+# MIGRATION_DATABASE_URL, JWT_SECRET, MFA_ENCRYPTION_KEY. See docs/deploy-cloudflare.md.
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      seed_demo:
+        description: Load the demo tenant (demo@example.com) after migrating
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPASSWORD: postgres
+      PSQL: psql -h localhost -U postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: bash scripts/db-setup.sh
+      - run: pnpm --filter @erp/shared build
+      - run: pnpm test
+      - run: pnpm --filter @erp/web build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @erp/shared build && pnpm --filter @erp/api build
+      - name: Migrate database
+        run: node apps/api/dist/db/migrate.cli.js
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      - name: Load demo tenant
+        if: ${{ inputs.seed_demo }}
+        run: |
+          test -n "$DEMO_PASSWORD" || { echo "Set the DEMO_PASSWORD secret first"; exit 1; }
+          node apps/api/dist/db/seed-demo.cli.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          RECURRING_SCHEDULER: "off"
+      - name: Deploy Worker and container
+        working-directory: deploy/cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MFA_ENCRYPTION_KEY: ${{ secrets.MFA_ENCRYPTION_KEY }}
+        run: |
+          npm ci --no-audit --no-fund
+          umask 077
+          node -e 'const k=["DATABASE_URL","JWT_SECRET","MFA_ENCRYPTION_KEY"];for(const n of k)if(!process.env[n])throw new Error(n+" secret is missing");console.log(JSON.stringify(Object.fromEntries(k.map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
+          npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json"
+          rm -f "$RUNNER_TEMP/secrets.json"
