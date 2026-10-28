@@ -1,0 +1,10 @@
+node_modules
+dist
+.next
+.env
+*.log
+storage/
+coverage/
+next-env.d.ts
+*.tsbuildinfo
+storage-test/
