@@ -3,7 +3,7 @@ import type { AccountType, CostCenterType, DimensionRule, JournalStatus, ModuleC
 export type Named = { id: string; code: string; name_ar: string; name_en: string };
 
 export type Me = {
-  user: { id: string; email: string; full_name: string; preferred_locale: 'ar' | 'en'; digit_style: 'latn' | 'arab' };
+  user: { id: string; email: string; full_name: string; preferred_locale: 'ar' | 'en'; digit_style: 'latn' | 'arab'; mfa_enabled?: boolean };
   tenant: { id: string; name: string; plan_code: string };
   tenants: { tenant_id: string; tenant_name: string }[];
   companies: (Named & { base_currency: string; base_minor_units: number; require_approval: boolean })[];

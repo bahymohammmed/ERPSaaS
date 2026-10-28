@@ -7,8 +7,8 @@ import { useState } from 'react';
 import { AccountSelect, PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
 import { useI18n } from '@/i18n/i18n';
-import { api } from '@/lib/api';
-import { useCurrencies } from '@/lib/queries';
+import { api, download } from '@/lib/api';
+import { useCompanyQuery, useCurrencies } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 
 type Company = {
@@ -26,6 +26,8 @@ type Company = {
   fx_gain_account_id?: string | null;
   fx_loss_account_id?: string | null;
   approval_threshold?: string | null;
+  budget_control?: 'NONE' | 'WARN' | 'BLOCK';
+  control_budget_id?: string | null;
   is_active: boolean;
   first_fiscal_year?: number;
   seed_chart_of_accounts?: boolean;
@@ -40,6 +42,8 @@ const CompaniesPage = () => {
   const [form, setForm] = useState<Company | null>(null);
   const set = <K extends keyof Company>(key: K, value: Company[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
   const canManage = can('admin.tenant');
+  const { data: budgets = [] } = useCompanyQuery<{ id: string; code: string; name_ar: string; name_en: string; status: string }[]>(['budgets'], '/gl/budgets');
+  const exportData = () => download('/admin/export', undefined, 'tenant-export.json').catch((e: unknown) => notifyError(errorText(e)));
 
   const save = async () => {
     if (!form) return;
@@ -60,6 +64,10 @@ const CompaniesPage = () => {
         title={t('navCompanies')}
         actions={
           canManage && (
+            <>
+            <Button variant="default" onClick={exportData}>
+              {t('exportTenant')}
+            </Button>
             <Button
               leftSection={<IconPlus size={16} />}
               onClick={() =>
@@ -82,6 +90,7 @@ const CompaniesPage = () => {
             >
               {t('newCompany')}
             </Button>
+            </>
           )
         }
       />
@@ -150,6 +159,25 @@ const CompaniesPage = () => {
                 value={form.approval_threshold ? String(Number(form.approval_threshold)) : ''}
                 onChange={(e) => set('approval_threshold', e.currentTarget.value || null)}
               />
+            )}
+            {form.id && form.id === current?.id && (
+              <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                <Select
+                  label={t('budgetControl')}
+                  data={(['NONE', 'WARN', 'BLOCK'] as const).map((v) => ({ value: v, label: t(`budgetControl${v}`) }))}
+                  value={form.budget_control ?? 'NONE'}
+                  onChange={(v) => set('budget_control', (v ?? 'NONE') as 'NONE' | 'WARN' | 'BLOCK')}
+                  allowDeselect={false}
+                />
+                <Select
+                  label={t('controlBudget')}
+                  clearable
+                  disabled={(form.budget_control ?? 'NONE') === 'NONE'}
+                  data={budgets.filter((b) => b.status === 'APPROVED').map((b) => ({ value: b.id, label: `${b.code} — ${name(b)}` }))}
+                  value={form.control_budget_id ?? null}
+                  onChange={(v) => set('control_budget_id', v)}
+                />
+              </SimpleGrid>
             )}
             {!form.id && <Checkbox label={t('seedCoa')} checked={!!form.seed_chart_of_accounts} onChange={(e) => set('seed_chart_of_accounts', e.currentTarget.checked)} />}
             {form.id && <Checkbox label={t('active')} checked={form.is_active} onChange={(e) => set('is_active', e.currentTarget.checked)} />}

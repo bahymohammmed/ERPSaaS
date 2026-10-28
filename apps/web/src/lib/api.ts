@@ -18,7 +18,13 @@ export const setApiCompany = (companyId: string | null): void => {
   currentCompanyId = companyId;
 };
 
-type Options = { method?: string; body?: unknown; query?: Record<string, string | number | boolean | undefined | null> };
+type Options = {
+  method?: string;
+  body?: unknown;
+  query?: Record<string, string | number | boolean | undefined | null>;
+  /** Overrides the selected company for this call (intercompany screens read the partner's data). */
+  companyId?: string;
+};
 
 const buildUrl = (path: string, query?: Options['query']): string => {
   const params = new URLSearchParams();
@@ -29,10 +35,13 @@ const buildUrl = (path: string, query?: Options['query']): string => {
   return `/api${path}${qs ? `?${qs}` : ''}`;
 };
 
-const headers = (json: boolean): HeadersInit => ({
-  ...(json ? { 'Content-Type': 'application/json' } : {}),
-  ...(currentCompanyId ? { 'X-Company-Id': currentCompanyId } : {}),
-});
+const headers = (json: boolean, companyId?: string): HeadersInit => {
+  const company = companyId ?? currentCompanyId;
+  return {
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    ...(company ? { 'X-Company-Id': company } : {}),
+  };
+};
 
 const failure = async (res: Response): Promise<never> => {
   const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
@@ -42,7 +51,7 @@ const failure = async (res: Response): Promise<never> => {
 export const api = async <T>(path: string, options: Options = {}): Promise<T> => {
   const res = await fetch(buildUrl(path, options.query), {
     method: options.method ?? 'GET',
-    headers: headers(options.body !== undefined),
+    headers: headers(options.body !== undefined, options.companyId),
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     credentials: 'same-origin',
   });

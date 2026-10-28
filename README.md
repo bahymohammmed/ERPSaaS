@@ -142,6 +142,25 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
   - A commit is all-or-nothing, and imported journals can be posted in the same step.
 - **Journal voucher PDF**: a printable voucher with the amount in words in Arabic and English (e.g. "فقط ألف وخمسمائة دينار كويتي ومائتان وخمسون فلس لا غير").
 
+### Group, control and security (phase 3)
+- **Cash flow statement** (indirect method): profit for the period adjusted by balance-sheet movements grouped by each account's cash-flow category (operating, investing, financing; uncategorised counts as operating). A check line confirms the result agrees with the movement in cash accounts.
+- **Budget control**: each company chooses NONE, WARN or BLOCK and a control budget.
+  - Posting compares year-to-date expense per account (per cost center when the budget has cost-center lines) against the approved budget.
+  - WARN posts and returns warnings, shown in the journal editor; BLOCK rejects the entry with `BUDGET_EXCEEDED`.
+- **Intercompany**: partner mappings define each company's due-from and due-to account for every other company.
+  - One request books both sides in one transaction, each balanced through its due-from or due-to account. Both companies must share a base currency.
+  - Reversing either side reverses its counterpart.
+  - The reconciliation report compares linked balances per company pair as of a date.
+- **Consolidation**: groups have a parent, members and a presentation currency (the parent's base currency).
+  - Members are translated at the parent's CLOSING rate for the position and AVERAGE rate for P&L. The translation residue goes to retained earnings.
+  - Linked intercompany balances are eliminated automatically; any mismatch is shown as "Unreconciled intercompany differences".
+  - Manual adjustments are entered by account code and dated.
+  - Reports: worksheet (per company, eliminations, adjustments, consolidated), consolidated financial position and consolidated profit or loss.
+- **Cost center hierarchy versions**: a snapshot of the tree with an effective date. The cost center analysis and summary reports can be run against any saved version.
+- **Two-factor authentication**: TOTP (RFC 6238) enrolment by QR code; secrets encrypted with AES-256-GCM (`MFA_ENCRYPTION_KEY`). Administrators can reset a member's 2FA.
+- **Rate limiting**: per-IP fixed window, 20/min on auth routes and 1200/min elsewhere (`RATE_LIMIT=off` disables it).
+- **Tenant export**: `GET admin/export` downloads all of a tenant's data as JSON, without password hashes or MFA secrets.
+
 ### Arabic / English
 - Master data has `name_ar` and `name_en`; if one is missing, the other is shown.
 - Search normalizes Arabic: alef forms, ta marbuta, alef maqsura, diacritics and tatweel.
@@ -165,7 +184,7 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
   - Permissions are loaded per request from the role.
   - Pre-tenant lookups (login, invitations) go through narrow `SECURITY DEFINER` functions.
 - **Authorization**:
-  - 14 permissions across 4 system roles (Administrator, Chief Accountant, Accountant, Viewer), plus custom roles.
+  - 18 permissions across 4 system roles (Administrator, Chief Accountant, Accountant, Viewer), plus custom roles.
   - A cost-center scope per user limits that user's lines, journal list and reports to their subtree.
 - **Tests**: cross-tenant reads, inserts and references are tested both through the API and with direct SQL.
 
@@ -190,16 +209,17 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 | Master data | `gl/accounts`, `gl/cost-centers`, `gl/dimensions`, `gl/dimension-values`, `gl/journal-types`, `gl/distribution-templates`, `gl/currencies`, `gl/exchange-rates`, `gl/fiscal-years`, `gl/periods`, `PATCH gl/periods/:id/status` |
 | Journals | `gl/journals` CRUD, `POST gl/journals/:id/{submit,approve,reject,post,reverse}`, attachments, `GET gl/journals/:id/audit`, `POST gl/postings` |
 | Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary,budget-vs-actual,statement}`, `GET gl/reports/voucher/:id`, with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
+| Group | `gl/intercompany/{partners,transactions}`, `GET gl/reports/{cash-flow,intercompany-reconciliation}`, `gl/cost-center-versions`, `consolidation/groups` (+ `/:id/adjustments`, `/:id/{worksheet,balance-sheet,income-statement}`) |
+| Security | `POST auth/mfa/{setup,enable,disable}`, `POST admin/users/:id/mfa-reset`, `GET admin/export` |
 | Period-end | `gl/recurring` (+ `/:id/run`), `POST gl/fx-revaluation[/preview]`, `gl/allocation/{drivers,rules,runs}`, `POST gl/allocation/preview`, `gl/budgets` (+ `/lines`, `/generate`, `/status`), `gl/year-end/{rules,close,reopen}`, `GET gl/year-end/:fiscalYearId/preview`, `gl/statements`, `gl/import/{accounts,journals}`, `GET gl/import/templates/:kind` |
 
 ## Not yet built
 
-- Cash flow statement (the cash-flow categories on accounts are already in place).
-- Budget control: blocking postings that exceed budget.
-- Multi-entity consolidation, intercompany entries and eliminations.
-- Cost center hierarchy versioning.
-- OIDC/SSO and MFA (auth is local accounts today).
+- OIDC/SSO.
 - Email delivery of invitations (a temporary password is shown once to the administrator).
 - Object storage for attachments (local disk today).
-- Rate limiting.
-- Per-tenant export and restore.
+- Dedicated-database tenants and per-tenant restore.
+- Automatic elimination of intra-group revenue and expense (only balances are eliminated; use manual adjustments).
+- Non-controlling interests and partial ownership.
+- Historical-rate translation of equity (equity is translated at the closing rate).
+- Shared rate-limit store for multi-instance deployments (in-memory today).

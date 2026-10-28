@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Alert, Button, Checkbox, Code, Group, Modal, MultiSelect, Paper, PasswordInput, Select, Stack, Table, TextInput } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Checkbox, Code, Group, Modal, MultiSelect, Paper, PasswordInput, Select, Stack, Table, TextInput } from '@mantine/core';
 import { IconPencil, IconPlus } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -20,6 +20,7 @@ type Member = {
   role_name_ar: string;
   role_name_en: string;
   cost_center_scope: string[] | null;
+  mfa_enabled: boolean;
 };
 type Role = { id: string; code: string; name_ar: string; name_en: string };
 type Form = { user_id?: string; email: string; full_name: string; password: string; role_id: string | null; is_active: boolean; cost_center_scope: string[] };
@@ -32,6 +33,17 @@ const UsersPage = () => {
   const { data: costCenters = [] } = useCostCenters();
   const [form, setForm] = useState<Form | null>(null);
   const [temporary, setTemporary] = useState<string | null>(null);
+
+  const resetMfa = async (userId: string) => {
+    if (!window.confirm(t('resetMfa'))) return;
+    try {
+      await api(`/admin/users/${userId}/mfa-reset`, { method: 'POST' });
+      notifySuccess(t('saved'));
+      await queryClient.invalidateQueries({ queryKey: ['members'] });
+    } catch (error) {
+      notifyError(errorText(error));
+    }
+  };
 
   const save = async () => {
     if (!form) return;
@@ -90,7 +102,14 @@ const UsersPage = () => {
                   <Table.Td>{locale === 'ar' ? m.role_name_ar : m.role_name_en}</Table.Td>
                   <Table.Td>{m.cost_center_scope?.map((id) => costCenters.find((c) => c.id === id)?.code ?? '?').join(', ') ?? t('all')}</Table.Td>
                   <Table.Td className="num">{m.last_login_at ? new Date(m.last_login_at).toLocaleString(locale === 'ar' ? 'ar-KW' : 'en-GB') : '—'}</Table.Td>
-                  <Table.Td>{m.is_active ? t('active') : t('inactive')}</Table.Td>
+                  <Table.Td>
+                    {m.is_active ? t('active') : t('inactive')}
+                    {m.mfa_enabled && (
+                      <Badge size="xs" ms={6} color="teal" variant="light">
+                        2FA
+                      </Badge>
+                    )}
+                  </Table.Td>
                   <Table.Td>
                     <ActionIcon
                       variant="subtle"
@@ -121,6 +140,11 @@ const UsersPage = () => {
               value={form.cost_center_scope}
               onChange={(v) => setForm({ ...form, cost_center_scope: v })}
             />
+            {form.user_id && members.find((m) => m.user_id === form.user_id)?.mfa_enabled && (
+              <Button variant="light" color="orange" onClick={() => resetMfa(form.user_id as string)}>
+                {t('resetMfa')}
+              </Button>
+            )}
             {form.user_id && <Checkbox label={t('active')} checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.currentTarget.checked })} />}
             <Group justify="flex-end">
               <Button variant="default" onClick={() => setForm(null)}>

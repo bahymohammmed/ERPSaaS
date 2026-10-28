@@ -23,7 +23,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core';
-import { convertToBase, Money, type MoneyValue, toMoney } from '@erp/shared';
+import { convertToBase, Money, type MoneyValue, toMoney, translateError } from '@erp/shared';
 import { IconAdjustmentsHorizontal, IconArrowBackUp, IconCheck, IconDownload, IconPaperclip, IconPlus, IconSend, IconTrash, IconX } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -276,8 +276,9 @@ export const JournalEditor = ({ id }: { id?: string }) => {
       const targetId = editable ? await save() : (id ?? null);
       if (!targetId) return;
       try {
-        await api(`/gl/journals/${targetId}/${action}`, { method: 'POST' });
+        const result = await api<{ warnings?: { code: 'BUDGET_EXCEEDED'; params: Record<string, string> }[] }>(`/gl/journals/${targetId}/${action}`, { method: 'POST' });
         notifySuccess(t('saved'));
+        for (const w of result.warnings ?? []) notifyError(translateError(w.code, locale, w.params));
       } catch (error) {
         notifyError(errorText(error));
       }

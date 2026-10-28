@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Badge, Button, Checkbox, Group, Modal, Paper, Select, SimpleGrid, Stack, Table, TextInput } from '@mantine/core';
+import { ActionIcon, Badge, Button, Checkbox, Group, Modal, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput } from '@mantine/core';
 import { COST_CENTER_TYPES, type CostCenterType } from '@erp/shared';
 import { IconPencil, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -63,6 +63,28 @@ const CostCentersPage = () => {
   }, [data, search]);
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
+  const versions = useQuery({
+    queryKey: [company?.id, 'cc-versions'],
+    queryFn: () => api<{ id: string; code: string; name_ar: string; name_en: string; effective_date: string; nodes: number }[]>('/gl/cost-center-versions'),
+    enabled: !!company,
+  });
+  const [version, setVersion] = useState<{ code: string; name: string; effective_date: string } | null>(null);
+  const saveVersion = async () => {
+    if (!version) return;
+    try {
+      await api('/gl/cost-center-versions', { method: 'POST', body: { code: version.code, name_ar: version.name, name_en: version.name, effective_date: version.effective_date } });
+      notifySuccess(t('saved'));
+      setVersion(null);
+      await versions.refetch();
+    } catch (error) {
+      notifyError(errorText(error));
+    }
+  };
+  const removeVersion = async (id: string) => {
+    if (!window.confirm(t('confirmDelete'))) return;
+    await api(`/gl/cost-center-versions/${id}`, { method: 'DELETE' }).catch((e: unknown) => notifyError(errorText(e)));
+    await versions.refetch();
+  };
   const refresh = () => queryClient.invalidateQueries({ queryKey: [company?.id, 'cost-centers'] });
 
   const save = async () => {
@@ -167,6 +189,52 @@ const CostCentersPage = () => {
           </Table>
         </Table.ScrollContainer>
       </Paper>
+
+      <Paper withBorder p="sm" mt="md">
+        <Group justify="space-between" mb="sm">
+          <Text fw={600}>{t('hierarchyVersions')}</Text>
+          {canManage && (
+            <Button size="xs" variant="light" onClick={() => setVersion({ code: '', name: '', effective_date: new Date().toISOString().slice(0, 10) })}>
+              {t('snapshotHierarchy')}
+            </Button>
+          )}
+        </Group>
+        <Table striped>
+          <Table.Tbody>
+            {(versions.data ?? []).map((v) => (
+              <Table.Tr key={v.id}>
+                <Table.Td className="ltr">{v.code}</Table.Td>
+                <Table.Td>{name(v)}</Table.Td>
+                <Table.Td className="num">{v.effective_date}</Table.Td>
+                <Table.Td className="num">{v.nodes}</Table.Td>
+                <Table.Td>
+                  {canManage && (
+                    <ActionIcon variant="subtle" color="red" onClick={() => removeVersion(v.id)} aria-label={t('delete')}>
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  )}
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+        {(versions.data ?? []).length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+      </Paper>
+
+      <Modal opened={!!version} onClose={() => setVersion(null)} title={t('snapshotHierarchy')}>
+        {version && (
+          <Stack>
+            <TextInput label={t('code')} value={version.code} onChange={(e) => setVersion({ ...version, code: e.currentTarget.value })} classNames={{ input: 'ltr' }} />
+            <TextInput label={t('name')} value={version.name} onChange={(e) => setVersion({ ...version, name: e.currentTarget.value })} />
+            <TextInput type="date" label={t('effectiveDate')} value={version.effective_date} onChange={(e) => setVersion({ ...version, effective_date: e.currentTarget.value })} />
+            <Group justify="flex-end">
+              <Button onClick={saveVersion} disabled={!version.code || !version.name}>
+                {t('save')}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
 
       <Modal opened={!!form} onClose={() => setForm(null)} title={form?.id ? t('edit') : t('add')} size="lg">
         {form && (

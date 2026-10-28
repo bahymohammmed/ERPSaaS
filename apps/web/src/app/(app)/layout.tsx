@@ -8,6 +8,9 @@ import {
   IconBuilding,
   IconCalendarStats,
   IconArrowsSplit,
+  IconArrowsExchange,
+  IconBuildingSkyscraper,
+  IconShieldCheck,
   IconCalendarRepeat,
   IconCurrencyDollar,
   IconFileImport,
@@ -32,6 +35,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { MfaModal } from '@/components/MfaModal';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/messages';
 import { api, ApiError } from '@/lib/api';
@@ -58,6 +62,8 @@ const CLOSING_ITEMS: NavItem[] = [
   { href: '/gl/year-end', label: 'navYearEnd', icon: IconLock, permission: 'gl.close.manage' },
   { href: '/gl/statements', label: 'navStatements', icon: IconTable, permission: 'gl.report.view' },
   { href: '/gl/import', label: 'navImport', icon: IconFileImport, permission: 'gl.master.manage' },
+  { href: '/gl/intercompany', label: 'navIntercompany', icon: IconArrowsExchange, permission: 'gl.master.view' },
+  { href: '/consolidation', label: 'navConsolidation', icon: IconBuildingSkyscraper, permission: 'gl.report.view' },
 ];
 
 const REPORT_ITEMS: { key: string; label: MessageKey }[] = [
@@ -70,6 +76,11 @@ const REPORT_ITEMS: { key: string; label: MessageKey }[] = [
   { key: 'cost-center-summary', label: 'reportCostCenterSummary' },
   { key: 'budget-vs-actual', label: 'reportBudgetVsActual' },
   { key: 'statement', label: 'reportStatement' },
+  { key: 'cash-flow', label: 'reportCashFlow' },
+  { key: 'intercompany-reconciliation', label: 'reportIcReconciliation' },
+  { key: 'consolidation-worksheet', label: 'reportConsolidationWorksheet' },
+  { key: 'consolidated-balance-sheet', label: 'reportConsolidatedBs' },
+  { key: 'consolidated-income-statement', label: 'reportConsolidatedIs' },
 ];
 
 const ADMIN_ITEMS: NavItem[] = [
@@ -83,6 +94,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
   const { t, name, digits, setDigits } = useI18n();
   const { me, error, isLoading, company, selectCompany, can } = useSession();
   const [opened, { toggle, close }] = useDisclosure();
+  const [mfaOpened, { open: openMfa, close: closeMfa }] = useDisclosure();
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -176,6 +188,10 @@ const Shell = ({ children }: { children: ReactNode }) => {
                     <Menu.Divider />
                   </>
                 )}
+                <Menu.Item leftSection={<IconShieldCheck size={14} />} onClick={openMfa}>
+                  {t('twoFactor')}
+                </Menu.Item>
+                <Menu.Divider />
                 <Menu.Label>{t('digitStyle')}</Menu.Label>
                 <Menu.Item onClick={() => changeDigits('latn')} fw={digits === 'latn' ? 700 : 400}>
                   {t('digitsLatin')}
@@ -215,6 +231,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
         </ScrollArea>
       </AppShell.Navbar>
 
+      <MfaModal opened={mfaOpened} enabled={!!me.user.mfa_enabled} onClose={closeMfa} />
       <AppShell.Main>{company ? children : <Text>{t('noData')}</Text>}</AppShell.Main>
     </AppShell>
   );

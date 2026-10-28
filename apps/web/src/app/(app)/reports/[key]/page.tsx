@@ -14,16 +14,23 @@ import { useCompanyQuery, useJournalTypes, usePeriods } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import type { Period } from '@/lib/types';
 
-type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement';
+type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement' | 'asOf' | 'group' | 'hierarchyVersion';
 
-const REPORTS: Record<string, { title: MessageKey; fields: Field[]; required: string[] }> = {
+type ReportDef = { title: MessageKey; fields: Field[]; required: string[]; path?: (p: Record<string, string>) => string };
+
+const REPORTS: Record<string, ReportDef> = {
   'trial-balance': { title: 'reportTrialBalance', fields: ['periodRange', 'costCenter', 'level', 'includeZero'], required: ['from_period_id', 'to_period_id'] },
   ledger: { title: 'reportLedger', fields: ['account', 'dateRange', 'costCenter'], required: ['account_id', 'from', 'to'] },
   'journal-register': { title: 'reportJournalRegister', fields: ['dateRange', 'journalType'], required: ['from', 'to'] },
   'income-statement': { title: 'reportIncomeStatement', fields: ['periodRange', 'costCenter', 'level', 'compare'], required: ['from_period_id', 'to_period_id'] },
   'balance-sheet': { title: 'reportBalanceSheet', fields: ['period', 'level', 'compare'], required: ['period_id'] },
-  'cost-center-matrix': { title: 'reportCostCenterMatrix', fields: ['periodRange', 'parentCostCenter', 'accountScope'], required: ['from_period_id', 'to_period_id'] },
-  'cost-center-summary': { title: 'reportCostCenterSummary', fields: ['periodRange'], required: ['from_period_id', 'to_period_id'] },
+  'cost-center-matrix': { title: 'reportCostCenterMatrix', fields: ['periodRange', 'parentCostCenter', 'accountScope', 'hierarchyVersion'], required: ['from_period_id', 'to_period_id'] },
+  'cost-center-summary': { title: 'reportCostCenterSummary', fields: ['periodRange', 'hierarchyVersion'], required: ['from_period_id', 'to_period_id'] },
+  'cash-flow': { title: 'reportCashFlow', fields: ['periodRange'], required: ['from_period_id', 'to_period_id'] },
+  'intercompany-reconciliation': { title: 'reportIcReconciliation', fields: ['asOf'], required: ['as_of'] },
+  'consolidation-worksheet': { title: 'reportConsolidationWorksheet', fields: ['group', 'asOf'], required: ['group_id', 'as_of'], path: (p) => `/consolidation/groups/${p.group_id}/worksheet` },
+  'consolidated-balance-sheet': { title: 'reportConsolidatedBs', fields: ['group', 'asOf'], required: ['group_id', 'as_of'], path: (p) => `/consolidation/groups/${p.group_id}/balance-sheet` },
+  'consolidated-income-statement': { title: 'reportConsolidatedIs', fields: ['group', 'dateRange'], required: ['group_id', 'from', 'to'], path: (p) => `/consolidation/groups/${p.group_id}/income-statement` },
   'budget-vs-actual': { title: 'reportBudgetVsActual', fields: ['budget', 'periodRange', 'costCenter', 'level'], required: ['budget_id', 'from_period_id', 'to_period_id'] },
   statement: { title: 'reportStatement', fields: ['statement', 'periodRange', 'period', 'costCenter', 'compare'], required: ['statement_id'] },
 };
@@ -44,6 +51,7 @@ const defaultParams = (periods: Period[]): Params => {
     period_id: current?.id ?? '',
     from: first?.start_date ?? `${today.slice(0, 4)}-01-01`,
     to: current?.end_date ?? today,
+    as_of: current?.end_date ?? today,
     compare: 'none',
     include_zero: 'false',
     account_scope: 'PL',
@@ -60,6 +68,9 @@ const ReportScreen = () => {
   const { data: journalTypes = [] } = useJournalTypes();
   const { data: budgets = [] } = useCompanyQuery<Option[]>(['budgets'], '/gl/budgets');
   const { data: statements = [] } = useCompanyQuery<StatementOption[]>(['statements'], '/gl/statements');
+  const { data: groups = [] } = useCompanyQuery<Option[]>(['consolidation-groups'], '/consolidation/groups');
+  const { data: versions = [] } = useCompanyQuery<Option[]>(['cc-versions'], '/gl/cost-center-versions');
+  const reportPath = (p: Params) => report?.path?.(p) ?? `/gl/reports/${key}`;
   const report = REPORTS[key];
   const [params, setParams] = useState<Params | null>(null);
   const [doc, setDoc] = useState<ReportDocument | null>(null);
@@ -80,7 +91,7 @@ const ReportScreen = () => {
     if (!report || !p) return;
     setLoading(true);
     try {
-      setDoc(await api<ReportDocument>(`/gl/reports/${key}`, { query: query(p) }));
+      setDoc(await api<ReportDocument>(reportPath(p), { query: query(p) }));
     } catch (error) {
       setDoc(null);
       notifyError(errorText(error));
@@ -113,6 +124,8 @@ const ReportScreen = () => {
       if (field === 'accountScope') add('account_scope');
       if (field === 'budget') add('budget_id');
       if (field === 'statement') add('statement_id');
+      if (field === 'asOf') add('as_of');
+      if (field === 'hierarchyVersion') add('hierarchy_version_id');
     }
     return relevant;
   };
@@ -121,7 +134,7 @@ const ReportScreen = () => {
     if (!params) return;
     setLoading(true);
     try {
-      await download(`/gl/reports/${key}`, { ...query(params), format, lang: exportLang, digits }, `${key}.${format}`);
+      await download(reportPath(params), { ...query(params), format, lang: exportLang, digits }, `${key}.${format}`);
     } catch (error) {
       notifyError(errorText(error));
     } finally {
@@ -168,6 +181,20 @@ const ReportScreen = () => {
       <PageHeader title={t(report.title)} subtitle={name(company)} />
       <Paper withBorder p="md">
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
+          {show('group') && (
+            <Select label={t('group')} data={groups.map((g) => ({ value: g.id, label: `${g.code} — ${name(g)}` }))} value={params.group_id || null} onChange={(v) => set('group_id', v)} />
+          )}
+          {show('asOf') && <TextInput type="date" label={t('asOfDate')} value={params.as_of ?? ''} onChange={(e) => set('as_of', e.currentTarget.value)} />}
+          {show('hierarchyVersion') && (
+            <Select
+              label={t('hierarchyVersion')}
+              clearable
+              placeholder={t('currentHierarchy')}
+              data={versions.map((v) => ({ value: v.id, label: `${v.code} — ${name(v)}` }))}
+              value={params.hierarchy_version_id || null}
+              onChange={(v) => set('hierarchy_version_id', v)}
+            />
+          )}
           {show('budget') && (
             <Select label={t('budget')} data={budgets.map((b) => ({ value: b.id, label: `${b.code} — ${name(b)}` }))} value={params.budget_id || null} onChange={(v) => set('budget_id', v)} />
           )}
