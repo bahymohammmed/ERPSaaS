@@ -1,6 +1,9 @@
 #!/bin/sh
 # Runs the API and the web server; if either exits, the container stops and the platform restarts it.
 set -e
+# Optional, for self-hosting and local trials (the Cloudflare workflow migrates from CI instead).
+if [ "$RUN_MIGRATIONS" = "true" ]; then node /app/api/dist/db/migrate.cli.js; fi
+if [ "$SEED_DEMO" = "true" ]; then RECURRING_SCHEDULER=off node /app/api/dist/db/seed-demo.cli.js; fi
 node /app/api/dist/main.js &
 API=$!
 HOSTNAME=0.0.0.0 PORT=3000 node /app/web/apps/web/server.js &

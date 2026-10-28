@@ -1,4 +1,7 @@
 # Local PostgreSQL for development. Roles and databases are created by scripts/db-setup.sh.
+#
+#   docker compose up -d                      database only (for pnpm dev:api / dev:web)
+#   docker compose --profile app up --build   database + the production image on http://localhost:8080
 services:
   postgres:
     image: postgres:16
@@ -9,5 +12,27 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/db-setup.sh:/docker-entrypoint-initdb.d/10-erp-setup.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 3s
+      retries: 20
+
+  app:
+    profiles: [app]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://erp_app:erp_app_dev@postgres:5432/erp
+      MIGRATION_DATABASE_URL: postgres://erp_owner:erp_owner_dev@postgres:5432/erp
+      JWT_SECRET: local-trial-secret-not-for-production
+      COOKIE_SECURE: "false"
+      RUN_MIGRATIONS: "true"
+      SEED_DEMO: "true"
+      ATTACHMENT_STORAGE: database
+    ports:
+      - "8080:3000"
+
 volumes:
   pgdata:

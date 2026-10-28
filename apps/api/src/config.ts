@@ -17,5 +17,6 @@ export const config = {
   /** 'disk' (under storageDir) or 'database' (gl.attachment_contents) for hosts without a persistent disk. */
   attachmentStorage: (process.env.ATTACHMENT_STORAGE === 'database' ? 'database' : 'disk') as 'disk' | 'database',
   chromiumPath: process.env.CHROMIUM_PATH || undefined,
-  secureCookies: process.env.NODE_ENV === 'production',
+  // COOKIE_SECURE=false lets the production image run over plain http on a local machine.
+  secureCookies: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
 };

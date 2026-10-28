@@ -12,6 +12,18 @@ Multi-tenant SaaS ERP. This first module is the General Ledger. It is built for 
 
 ## Quick start
 
+### Run the production image (Docker only)
+
+```bash
+docker compose --profile app up --build
+```
+
+This builds the production image and starts PostgreSQL with it. It then applies the migrations and loads the demo tenant. Open http://localhost:8080 and sign in with `demo@example.com` / `demo-password-123`. `docker compose --profile app down -v` stops everything and deletes the data.
+
+### Development
+
+Requires Node 22 and pnpm 10.
+
 ```bash
 pnpm install
 pnpm build:shared
