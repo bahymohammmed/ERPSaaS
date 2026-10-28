@@ -669,10 +669,12 @@ export class ReportsService {
       rows.push({ cells: { name: t('إجمالي المطلوبات', 'Total liabilities'), current: amount(liabCur), ...(aggPri ? { prior: amount(liabPri) } : {}) }, style: 'subtotal' });
 
       emitSection('EQUITY');
-      rows.push({
-        cells: { name: t('نتائج سنوات سابقة غير مقفلة', "Prior years' unclosed result"), current: amount(cur.priorResult), ...(pri ? { prior: amount(pri.priorResult) } : {}) },
-        level: 0,
-      });
+      if (!cur.priorResult.isZero() || (pri && !pri.priorResult.isZero())) {
+        rows.push({
+          cells: { name: t('نتائج سنوات سابقة غير مقفلة', "Prior years' unclosed result"), current: amount(cur.priorResult), ...(pri ? { prior: amount(pri.priorResult) } : {}) },
+          level: 0,
+        });
+      }
       rows.push({
         cells: { name: t('صافي ربح (خسارة) السنة الحالية', 'Current year profit (loss)'), current: amount(cur.currentResult), ...(pri ? { prior: amount(pri.currentResult) } : {}) },
         level: 0,

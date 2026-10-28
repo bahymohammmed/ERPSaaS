@@ -5,7 +5,7 @@ set -euo pipefail
 
 OWNER_PASSWORD="${ERP_OWNER_PASSWORD:-erp_owner_dev}"
 APP_PASSWORD="${ERP_APP_PASSWORD:-erp_app_dev}"
-PSQL="${PSQL:-psql}"
+PSQL="${PSQL:-psql -U ${POSTGRES_USER:-postgres}}"
 
 run() { $PSQL -v ON_ERROR_STOP=1 -qtAc "$1" postgres; }
 

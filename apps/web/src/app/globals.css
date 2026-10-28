@@ -1,0 +1,12 @@
+html, body { height: 100%; }
+body { background: var(--mantine-color-gray-0); }
+[data-mantine-color-scheme='dark'] body { background: var(--mantine-color-dark-8); }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; direction: ltr; unicode-bidi: isolate; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.amount-cell { text-align: end; }
+tr.row-header td { font-weight: 600; }
+tr.row-section td { font-weight: 700; background: var(--mantine-color-gray-1); }
+tr.row-subtotal td { font-weight: 600; border-top: 1px solid var(--mantine-color-gray-4); }
+tr.row-grandTotal td, tr.row-total td { font-weight: 700; background: var(--mantine-color-indigo-0); border-top: 2px solid var(--mantine-color-indigo-6); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--mantine-color-indigo-0); }
