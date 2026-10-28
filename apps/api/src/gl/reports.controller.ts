@@ -1,6 +1,7 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Res } from '@nestjs/common';
 import {
   balanceSheetQuerySchema,
+  budgetVsActualQuerySchema,
   costCenterReportQuerySchema,
   costCenterSummaryQuerySchema,
   type DigitStyle,
@@ -9,12 +10,15 @@ import {
   ledgerQuerySchema,
   type ReportDocument,
   type ReportLanguage,
+  statementQuerySchema,
   trialBalanceQuerySchema,
+  voucherQuerySchema,
 } from '@erp/shared';
 import type { Response } from 'express';
 import { CompanyCtx, CompanyScoped, RequirePermissions } from '../common/decorators';
 import type { CompanyContext } from '../common/request-context';
 import { parse } from '../common/zod.pipe';
+import { AnalysisReportsService } from './analysis-reports.service';
 import { ExportService } from './export/export.service';
 import { ReportsService } from './reports.service';
 
@@ -27,7 +31,27 @@ export class ReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly exporter: ExportService,
+    private readonly analysis: AnalysisReportsService,
   ) {}
+
+  @Get('budget-vs-actual')
+  async budgetVsActual(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(budgetVsActualQuerySchema, query);
+    await this.send(res, q, await this.analysis.budgetVsActual(ctx, q));
+  }
+
+  @Get('statement')
+  async statement(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(statementQuerySchema, query);
+    await this.send(res, q, await this.analysis.statement(ctx, q));
+  }
+
+  @Get('voucher/:id')
+  @RequirePermissions('gl.journal.view')
+  async voucher(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(voucherQuerySchema, query);
+    await this.send(res, q, await this.analysis.voucher(ctx, id));
+  }
 
   @Get('trial-balance')
   async trialBalance(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown, @Res() res: Response) {

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { JournalEntryInput, PostingRequest } from '@erp/shared';
+import { type JournalEntryInput, type PostingRequest, toMoney } from '@erp/shared';
 import type { z } from 'zod';
 import type { journalListQuerySchema } from '@erp/shared';
 import { AppError, notFound } from '../common/app-error';
@@ -70,11 +70,23 @@ export class JournalsService {
       const type = await this.journalType(tx, ctx.companyId, input.journal_type_id);
       if (type.is_system) throw new AppError('JOURNAL_SYSTEM_TYPE', { code: type.code });
       const period = await this.fiscal.resolvePeriod(tx, ctx.companyId, input.entry_date, input.adjustment_period);
+      assertAutoReverse(input);
       const entry = await tx.one<{ id: string }>(
         `INSERT INTO gl.journal_entries (tenant_id, company_id, journal_type_id, fiscal_year_id, period_id, entry_date,
-           description, reference, source_module, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'GL', $9) RETURNING id`,
-        [ctx.tenantId, ctx.companyId, type.id, period.fiscal_year_id, period.id, input.entry_date, input.description ?? null, input.reference ?? null, ctx.userId],
+           description, reference, source_module, created_by, auto_reverse_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'GL', $9, $10) RETURNING id`,
+        [
+          ctx.tenantId,
+          ctx.companyId,
+          type.id,
+          period.fiscal_year_id,
+          period.id,
+          input.entry_date,
+          input.description ?? null,
+          input.reference ?? null,
+          ctx.userId,
+          input.auto_reverse_date ?? null,
+        ],
       );
       await this.writeLines(tx, ctx, company, entry.id, input);
       await this.audit.record(tx, ctx, { action: 'create', entityType: 'journal_entry', entityId: entry.id, companyId: ctx.companyId, newData: input });
@@ -92,11 +104,24 @@ export class JournalsService {
       if (type.is_system) throw new AppError('JOURNAL_SYSTEM_TYPE', { code: type.code });
       const period = await this.fiscal.resolvePeriod(tx, ctx.companyId, input.entry_date, input.adjustment_period);
       const before = await this.load(tx, ctx, id);
+      assertAutoReverse(input);
       await tx.query(
         `UPDATE gl.journal_entries SET journal_type_id = $3, fiscal_year_id = $4, period_id = $5, entry_date = $6,
-           description = $7, reference = $8, updated_by = $9, version = version + 1, rejection_reason = NULL
+           description = $7, reference = $8, updated_by = $9, version = version + 1, rejection_reason = NULL,
+           auto_reverse_date = $10
          WHERE company_id = $1 AND id = $2`,
-        [ctx.companyId, id, type.id, period.fiscal_year_id, period.id, input.entry_date, input.description ?? null, input.reference ?? null, ctx.userId],
+        [
+          ctx.companyId,
+          id,
+          type.id,
+          period.fiscal_year_id,
+          period.id,
+          input.entry_date,
+          input.description ?? null,
+          input.reference ?? null,
+          ctx.userId,
+          input.auto_reverse_date ?? null,
+        ],
       );
       await tx.query('DELETE FROM gl.journal_lines WHERE company_id = $1 AND entry_id = $2', [ctx.companyId, id]);
       await this.writeLines(tx, ctx, company, id, input);
@@ -151,7 +176,9 @@ export class JournalsService {
 
   post(ctx: CompanyContext, id: string) {
     return this.transition(ctx, id, 'post', ['DRAFT', 'SUBMITTED', 'APPROVED'], async (tx, entry, company) => {
-      if (company.require_approval && entry.status !== 'APPROVED') throw new AppError('JOURNAL_APPROVAL_REQUIRED');
+      if (company.require_approval && entry.status !== 'APPROVED' && !(await this.belowThreshold(tx, company, id))) {
+        throw new AppError('JOURNAL_APPROVAL_REQUIRED');
+      }
       await this.engine.post(tx, ctx, company, entry);
     });
   }
@@ -160,60 +187,8 @@ export class JournalsService {
   reverse(ctx: CompanyContext, id: string, input: { reversal_date?: string; description?: string }) {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await loadCompany(tx, ctx.companyId);
-      const original = await this.engine.lockEntry(tx, ctx.companyId, id);
-      if (original.status === 'REVERSED') throw new AppError('JOURNAL_ALREADY_REVERSED');
-      if (original.status !== 'POSTED') throw new AppError('JOURNAL_INVALID_TRANSITION', { action: 'reverse', status: original.status });
-
-      const header = await tx.one<{ entry_no: string; description: string | null; reference: string | null }>(
-        'SELECT entry_no, description, reference FROM gl.journal_entries WHERE id = $1',
-        [id],
-      );
-      const reversalDate = input.reversal_date ?? original.entry_date;
-      const period = await this.fiscal.resolvePeriod(tx, ctx.companyId, reversalDate);
-      const revType = await tx.one<{ id: string }>("SELECT id FROM gl.journal_types WHERE company_id = $1 AND code = 'REV'", [ctx.companyId]);
-      const reversal = await tx.one<{ id: string }>(
-        `INSERT INTO gl.journal_entries (tenant_id, company_id, journal_type_id, fiscal_year_id, period_id, entry_date,
-           description, reference, source_module, reversal_of_id, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-        [
-          ctx.tenantId,
-          ctx.companyId,
-          revType.id,
-          period.fiscal_year_id,
-          period.id,
-          reversalDate,
-          input.description ?? `عكس القيد ${header.entry_no} / Reversal of ${header.entry_no}`,
-          header.reference,
-          original.source_module,
-          id,
-          ctx.userId,
-        ],
-      );
-      const lines = await tx.query<{ id: string }>('SELECT id FROM gl.journal_lines WHERE entry_id = $1 ORDER BY line_no', [id]);
-      for (const line of lines) {
-        const copy = await tx.one<{ id: string }>(
-          `INSERT INTO gl.journal_lines (tenant_id, company_id, entry_id, line_no, account_id, cost_center_id, description,
-             currency_code, exchange_rate, debit, credit, debit_base, credit_base, is_rounding)
-           SELECT tenant_id, company_id, $2, line_no, account_id, cost_center_id, description, currency_code, exchange_rate,
-                  credit, debit, credit_base, debit_base, is_rounding
-           FROM gl.journal_lines WHERE id = $1 RETURNING id`,
-          [line.id, reversal.id],
-        );
-        await tx.query(
-          `INSERT INTO gl.journal_line_dimensions (tenant_id, company_id, line_id, dimension_type_id, dimension_value_id)
-           SELECT tenant_id, company_id, $2, dimension_type_id, dimension_value_id FROM gl.journal_line_dimensions WHERE line_id = $1`,
-          [line.id, copy.id],
-        );
-      }
-      const reversalEntry = await this.engine.lockEntry(tx, ctx.companyId, reversal.id);
-      await this.engine.post(tx, ctx, company, reversalEntry, { preserveBase: true });
-      await tx.query(
-        `UPDATE gl.journal_entries SET status = 'REVERSED', reversed_by_id = $3, updated_by = $4, version = version + 1
-         WHERE company_id = $1 AND id = $2`,
-        [ctx.companyId, id, reversal.id, ctx.userId],
-      );
-      await this.audit.record(tx, ctx, { action: 'reverse', entityType: 'journal_entry', entityId: id, companyId: ctx.companyId, newData: { reversal_id: reversal.id } });
-      return this.load(tx, ctx, reversal.id);
+      const reversalId = await this.engine.reverse(tx, ctx, company, id, { date: input.reversal_date, description: input.description });
+      return this.load(tx, ctx, reversalId);
     });
   }
 
@@ -230,6 +205,7 @@ export class JournalsService {
       if (existing) return { ...(await this.load(tx, ctx, existing.id)), idempotent_replay: true };
 
       const company = await loadCompany(tx, ctx.companyId);
+      assertAutoReverse(request);
       const type = await tx.maybeOne<{ id: string; source_module: string; is_active: boolean }>(
         'SELECT id, source_module, is_active FROM gl.journal_types WHERE company_id = $1 AND code = $2',
         [ctx.companyId, request.journal_type_code],
@@ -238,8 +214,8 @@ export class JournalsService {
       const period = await this.fiscal.resolvePeriod(tx, ctx.companyId, request.entry_date, request.adjustment_period);
       const entry = await tx.one<{ id: string }>(
         `INSERT INTO gl.journal_entries (tenant_id, company_id, journal_type_id, fiscal_year_id, period_id, entry_date,
-           description, reference, source_module, source_doc_type, source_doc_id, idempotency_key, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+           description, reference, source_module, source_doc_type, source_doc_id, idempotency_key, created_by, auto_reverse_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
         [
           ctx.tenantId,
           ctx.companyId,
@@ -254,6 +230,7 @@ export class JournalsService {
           request.source_doc_id,
           request.idempotency_key,
           ctx.userId,
+          request.auto_reverse_date ?? null,
         ],
       );
       await this.writeLines(tx, ctx, company, entry.id, request);
@@ -304,6 +281,13 @@ export class JournalsService {
       totals.debit.toFixed(4),
       totals.credit.toFixed(4),
     ]);
+  }
+
+  /** Entries below the company's approval threshold may be posted without approval. */
+  private async belowThreshold(tx: Tx, company: CompanyInfo, entryId: string): Promise<boolean> {
+    if (company.approval_threshold === null) return false;
+    const row = await tx.one<{ total_debit: string }>('SELECT total_debit FROM gl.journal_entries WHERE id = $1', [entryId]);
+    return toMoney(row.total_debit).lessThan(company.approval_threshold);
   }
 
   private async journalType(tx: Tx, companyId: string, id: string) {
@@ -357,3 +341,7 @@ export class JournalsService {
     return { ...header, lines, attachments };
   }
 }
+
+const assertAutoReverse = (input: { entry_date: string; auto_reverse_date?: string | null }): void => {
+  if (input.auto_reverse_date && input.auto_reverse_date <= input.entry_date) throw new AppError('AUTO_REVERSE_DATE');
+};

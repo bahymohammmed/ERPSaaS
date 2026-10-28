@@ -4,3 +4,4 @@ export * from './errors';
 export * from './permissions';
 export * from './schemas';
 export * from './report-document';
+export * from './words';

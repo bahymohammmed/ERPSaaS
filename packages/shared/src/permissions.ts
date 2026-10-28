@@ -13,6 +13,8 @@ export const PERMISSIONS = [
   'gl.journal.post',
   'gl.journal.reverse',
   'gl.report.view',
+  'gl.budget.manage',
+  'gl.close.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -35,6 +37,8 @@ export const SYSTEM_ROLES: Record<SystemRoleCode, { name_ar: string; name_en: st
       'gl.journal.post',
       'gl.journal.reverse',
       'gl.report.view',
+      'gl.budget.manage',
+      'gl.close.manage',
       'admin.audit',
     ],
   },

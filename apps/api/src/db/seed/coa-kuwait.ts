@@ -11,6 +11,7 @@ export type TemplateAccount = {
   cashFlow?: CashFlowCategory;
   control?: ModuleCode;
   reconcilable?: boolean;
+  revalue?: boolean;
 };
 
 type Row = [code: string, ar: string, en: string, opts?: Partial<Omit<TemplateAccount, 'code' | 'ar' | 'en' | 'parent' | 'type'>>];
@@ -35,10 +36,10 @@ const ASSETS = build('ASSET', 'NOT_ALLOWED', [
   ['110101', 'الصندوق', 'Cash on hand', { cashFlow: 'CASH' }],
   ['110102', 'العهد النقدية', 'Petty cash', { cashFlow: 'CASH' }],
   ['110103', 'البنوك - حسابات جارية بالدينار', 'Banks - current accounts (KWD)', { cashFlow: 'CASH', reconcilable: true }],
-  ['110104', 'البنوك - حسابات جارية بالعملات الأجنبية', 'Banks - current accounts (foreign currency)', { cashFlow: 'CASH', reconcilable: true }],
+  ['110104', 'البنوك - حسابات جارية بالعملات الأجنبية', 'Banks - current accounts (foreign currency)', { cashFlow: 'CASH', reconcilable: true, revalue: true }],
   ['110105', 'ودائع قصيرة الأجل', 'Short-term deposits', { cashFlow: 'CASH', reconcilable: true }],
   ['1102', 'المدينون والأرصدة المدينة الأخرى', 'Trade and other receivables'],
-  ['110201', 'ذمم مدينة تجارية', 'Trade receivables', { control: 'AR', cashFlow: 'OPERATING' }],
+  ['110201', 'ذمم مدينة تجارية', 'Trade receivables', { control: 'AR', cashFlow: 'OPERATING', revalue: true }],
   ['110202', 'مخصص خسائر الائتمان المتوقعة', 'Allowance for expected credit losses', { cashFlow: 'OPERATING' }],
   ['110203', 'ذمم الموظفين', 'Employee receivables', { cashFlow: 'OPERATING' }],
   ['110204', 'مصروفات مدفوعة مقدماً', 'Prepaid expenses', { cashFlow: 'OPERATING' }],
@@ -82,7 +83,7 @@ const LIABILITIES = build('LIABILITY', 'NOT_ALLOWED', [
   ['2', 'المطلوبات', 'Liabilities'],
   ['21', 'المطلوبات المتداولة', 'Current liabilities'],
   ['2101', 'الدائنون والأرصدة الدائنة الأخرى', 'Trade and other payables'],
-  ['210101', 'ذمم دائنة تجارية', 'Trade payables', { control: 'AP', cashFlow: 'OPERATING' }],
+  ['210101', 'ذمم دائنة تجارية', 'Trade payables', { control: 'AP', cashFlow: 'OPERATING', revalue: true }],
   ['210102', 'مصروفات مستحقة', 'Accrued expenses', { cashFlow: 'OPERATING' }],
   ['210103', 'رواتب مستحقة', 'Accrued salaries', { cashFlow: 'OPERATING' }],
   ['210104', 'دفعات مقدمة من العملاء', 'Advances from customers', { cashFlow: 'OPERATING' }],
@@ -187,6 +188,8 @@ export const KUWAIT_IFRS_COA: TemplateAccount[] = [...ASSETS, ...LIABILITIES, ..
 
 export const TEMPLATE_ROUNDING_ACCOUNT = '5703';
 export const TEMPLATE_RETAINED_EARNINGS_ACCOUNT = '3301';
+export const TEMPLATE_FX_GAIN_ACCOUNT = '4202';
+export const TEMPLATE_FX_LOSS_ACCOUNT = '5701';
 
 export const DEFAULT_JOURNAL_TYPES: { code: string; ar: string; en: string; system: boolean; module: ModuleCode }[] = [
   { code: 'JV', ar: 'قيد يومية', en: 'Journal voucher', system: false, module: 'GL' },
@@ -195,6 +198,7 @@ export const DEFAULT_JOURNAL_TYPES: { code: string; ar: string; en: string; syst
   { code: 'REV', ar: 'قيد عكسي', en: 'Reversal', system: true, module: 'GL' },
   { code: 'CLS', ar: 'قيد إقفال', en: 'Year-end closing', system: true, module: 'GL' },
   { code: 'FXR', ar: 'إعادة تقييم العملات', en: 'FX revaluation', system: true, module: 'GL' },
+  { code: 'ALC', ar: 'قيد توزيع التكاليف', en: 'Cost allocation', system: true, module: 'GL' },
   { code: 'AP', ar: 'قيود الموردين', en: 'Payables postings', system: true, module: 'AP' },
   { code: 'AR', ar: 'قيود العملاء', en: 'Receivables postings', system: true, module: 'AR' },
   { code: 'INV', ar: 'قيود المخزون', en: 'Inventory postings', system: true, module: 'INV' },

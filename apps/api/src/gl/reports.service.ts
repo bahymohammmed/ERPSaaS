@@ -16,9 +16,9 @@ import type { CompanyContext } from '../common/request-context';
 import { DbService, type Tx } from '../db/db.service';
 import { scopedCostCenterIds } from './cost-centers.service';
 
-type Period = { id: string; fiscal_year_id: string; period_no: number; code: string; name_ar: string; name_en: string; start_date: string; end_date: string };
+export type Period = { id: string; fiscal_year_id: string; period_no: number; code: string; name_ar: string; name_en: string; start_date: string; end_date: string };
 type FiscalYear = { id: string; code: string; start_date: string; end_date: string };
-type Account = {
+export type Account = {
   id: string;
   code: string;
   name_ar: string;
@@ -28,11 +28,11 @@ type Account = {
   account_type: AccountType;
   normal_balance: 'DEBIT' | 'CREDIT';
 };
-type Company = { name_ar: string; name_en: string; base_currency: string; minor_units: number };
-type DC = { debit: MoneyValue; credit: MoneyValue };
+export type Company = { name_ar: string; name_en: string; base_currency: string; minor_units: number };
+export type DC = { debit: MoneyValue; credit: MoneyValue };
 
 const zero = (): DC => ({ debit: new Money(0), credit: new Money(0) });
-const t = (ar: string, en: string): BilingualText => ({ ar, en });
+export const t = (ar: string, en: string): BilingualText => ({ ar, en });
 const net = (v: DC): MoneyValue => v.debit.minus(v.credit);
 
 const TYPE_TITLES: Record<AccountType, BilingualText> = {
@@ -43,10 +43,22 @@ const TYPE_TITLES: Record<AccountType, BilingualText> = {
   EXPENSE: t('المصروفات', 'Expenses'),
 };
 
+/**
+ * Balances without the year-end closing entries, for P&L-style reports: a closing entry zeroes revenue
+ * and expenses in the adjustment period and would otherwise wipe out a full-year income statement.
+ */
+export const OPERATING_BALANCES = `(
+  SELECT company_id, period_id, account_id, cost_center_id, debit_base, credit_base FROM gl.account_balances
+  UNION ALL
+  SELECT l.company_id, e.period_id, l.account_id, l.cost_center_id, -l.debit_base, -l.credit_base
+  FROM gl.journal_lines l JOIN gl.journal_entries e ON e.id = l.entry_id
+  WHERE e.source_doc_type = 'YEAR_END_CLOSE' AND e.status IN ('POSTED', 'REVERSED')
+)`;
+
 /** Ordering key of a period: (start_date, period_no) puts the adjustment period after month 12. */
 const periodKeyBefore = (alias: string, n: number) => `(${alias}.start_date, ${alias}.period_no) < ($${n}::date, $${n + 1}::int)`;
-const periodKeyAtMost = (alias: string, n: number) => `(${alias}.start_date, ${alias}.period_no) <= ($${n}::date, $${n + 1}::int)`;
-const periodKeyAtLeast = (alias: string, n: number) => `(${alias}.start_date, ${alias}.period_no) >= ($${n}::date, $${n + 1}::int)`;
+export const periodKeyAtMost = (alias: string, n: number) => `(${alias}.start_date, ${alias}.period_no) <= ($${n}::date, $${n + 1}::int)`;
+export const periodKeyAtLeast = (alias: string, n: number) => `(${alias}.start_date, ${alias}.period_no) >= ($${n}::date, $${n + 1}::int)`;
 
 @Injectable()
 export class ReportsService {
@@ -384,7 +396,7 @@ export class ReportsService {
       const types: AccountType[] = q.account_scope === 'PL' ? ['REVENUE', 'EXPENSE'] : [q.account_scope];
       const rowsData = await tx.query<{ account_id: string; cost_center_id: string | null; debit: string; credit: string }>(
         `SELECT b.account_id, b.cost_center_id, sum(b.debit_base) AS debit, sum(b.credit_base) AS credit
-         FROM gl.account_balances b JOIN gl.fiscal_periods p ON p.id = b.period_id JOIN gl.accounts a ON a.id = b.account_id
+         FROM ${OPERATING_BALANCES} b JOIN gl.fiscal_periods p ON p.id = b.period_id JOIN gl.accounts a ON a.id = b.account_id
          WHERE b.company_id = $1 AND a.account_type = ANY($6::text[]) AND ${periodKeyAtLeast('p', 2)} AND ${periodKeyAtMost('p', 4)}
          GROUP BY b.account_id, b.cost_center_id`,
         [ctx.companyId, from.start_date, from.period_no, to.start_date, to.period_no, types],
@@ -461,7 +473,7 @@ export class ReportsService {
       );
       const data = await tx.query<{ cost_center_id: string; account_type: AccountType; debit: string; credit: string }>(
         `SELECT b.cost_center_id, a.account_type, sum(b.debit_base) AS debit, sum(b.credit_base) AS credit
-         FROM gl.account_balances b JOIN gl.fiscal_periods p ON p.id = b.period_id JOIN gl.accounts a ON a.id = b.account_id
+         FROM ${OPERATING_BALANCES} b JOIN gl.fiscal_periods p ON p.id = b.period_id JOIN gl.accounts a ON a.id = b.account_id
          WHERE b.company_id = $1 AND b.cost_center_id IS NOT NULL AND a.account_type IN ('REVENUE', 'EXPENSE')
            AND ${periodKeyAtLeast('p', 2)} AND ${periodKeyAtMost('p', 4)}
          GROUP BY b.cost_center_id, a.account_type`,
@@ -535,7 +547,7 @@ export class ReportsService {
       const ccIds = await this.costCenterFilter(tx, ctx, q.cost_center_id);
       const accounts = await this.accounts(tx, ctx.companyId);
       const range = (f: Period, t2: Period) =>
-        this.sums(tx, ctx.companyId, `${periodKeyAtLeast('p', 2)} AND ${periodKeyAtMost('p', 4)}`, [f.start_date, f.period_no, t2.start_date, t2.period_no], ccIds);
+        this.sums(tx, ctx.companyId, `${periodKeyAtLeast('p', 2)} AND ${periodKeyAtMost('p', 4)}`, [f.start_date, f.period_no, t2.start_date, t2.period_no], ccIds, true);
       const current = await range(from, to);
       const prior = q.compare === 'prior_year' ? await this.priorYearRange(tx, ctx.companyId, from, to) : null;
       const priorSums = prior ? await range(prior[0], prior[1]) : null;
@@ -697,7 +709,7 @@ export class ReportsService {
 
   // ================================================================ helpers
 
-  private document(reportKey: string, title: BilingualText, company: Company, columns: ReportColumn[], rows: ReportRow[], subtitle: BilingualText[], notes: BilingualText[]): ReportDocument {
+  document(reportKey: string, title: BilingualText, company: Company, columns: ReportColumn[], rows: ReportRow[], subtitle: BilingualText[], notes: BilingualText[]): ReportDocument {
     return {
       reportKey,
       title,
@@ -712,27 +724,27 @@ export class ReportsService {
     };
   }
 
-  private company(tx: Tx, companyId: string): Promise<Company> {
+  company(tx: Tx, companyId: string): Promise<Company> {
     return tx.one<Company>(
       `SELECT c.name_ar, c.name_en, c.base_currency, cur.minor_units FROM core.companies c JOIN core.currencies cur ON cur.code = c.base_currency WHERE c.id = $1`,
       [companyId],
     );
   }
 
-  private accounts(tx: Tx, companyId: string): Promise<Account[]> {
+  accounts(tx: Tx, companyId: string): Promise<Account[]> {
     return tx.query<Account>(
       'SELECT id, code, name_ar, name_en, parent_id, is_posting, account_type, normal_balance FROM gl.accounts WHERE company_id = $1 ORDER BY code',
       [companyId],
     );
   }
 
-  private async period(tx: Tx, companyId: string, id: string): Promise<Period> {
+  async period(tx: Tx, companyId: string, id: string): Promise<Period> {
     const p = await tx.maybeOne<Period>('SELECT * FROM gl.fiscal_periods WHERE company_id = $1 AND id = $2', [companyId, id]);
     if (!p) throw notFound('period');
     return p;
   }
 
-  private async periodRange(tx: Tx, companyId: string, fromId: string, toId: string): Promise<[Period, Period]> {
+  async periodRange(tx: Tx, companyId: string, fromId: string, toId: string): Promise<[Period, Period]> {
     const from = await this.period(tx, companyId, fromId);
     const to = await this.period(tx, companyId, toId);
     if (from.start_date > to.start_date || (from.start_date === to.start_date && from.period_no > to.period_no)) {
@@ -741,11 +753,11 @@ export class ReportsService {
     return [from, to];
   }
 
-  private fiscalYear(tx: Tx, id: string): Promise<FiscalYear> {
+  fiscalYear(tx: Tx, id: string): Promise<FiscalYear> {
     return tx.one<FiscalYear>('SELECT id, code, start_date, end_date FROM gl.fiscal_years WHERE id = $1', [id]);
   }
 
-  private async priorFiscalYear(tx: Tx, companyId: string, fiscalYearId: string): Promise<FiscalYear | null> {
+  async priorFiscalYear(tx: Tx, companyId: string, fiscalYearId: string): Promise<FiscalYear | null> {
     return tx.maybeOne<FiscalYear>(
       `SELECT p.id, p.code, p.start_date, p.end_date FROM gl.fiscal_years c
        JOIN gl.fiscal_years p ON p.company_id = c.company_id AND p.end_date = c.start_date - 1
@@ -754,20 +766,20 @@ export class ReportsService {
     );
   }
 
-  private async samePeriodPriorYear(tx: Tx, companyId: string, period: Period): Promise<Period | null> {
+  async samePeriodPriorYear(tx: Tx, companyId: string, period: Period): Promise<Period | null> {
     const prior = await this.priorFiscalYear(tx, companyId, period.fiscal_year_id);
     if (!prior) return null;
     return tx.maybeOne<Period>('SELECT * FROM gl.fiscal_periods WHERE fiscal_year_id = $1 AND period_no = $2', [prior.id, period.period_no]);
   }
 
-  private async priorYearRange(tx: Tx, companyId: string, from: Period, to: Period): Promise<[Period, Period] | null> {
+  async priorYearRange(tx: Tx, companyId: string, from: Period, to: Period): Promise<[Period, Period] | null> {
     const f = await this.samePeriodPriorYear(tx, companyId, from);
     const t2 = await this.samePeriodPriorYear(tx, companyId, to);
     return f && t2 ? [f, t2] : null;
   }
 
   /** Cost center filter combining the requested subtree with the user's scope; null = no filter. */
-  private async costCenterFilter(tx: Tx, ctx: CompanyContext, costCenterId?: string): Promise<string[] | null> {
+  async costCenterFilter(tx: Tx, ctx: CompanyContext, costCenterId?: string): Promise<string[] | null> {
     const scope = await scopedCostCenterIds(tx, ctx);
     if (!costCenterId) return scope;
     const requested = await descendantIds(tx, 'gl.cost_centers', ctx.companyId, [costCenterId]);
@@ -778,18 +790,18 @@ export class ReportsService {
     return allowed;
   }
 
-  private async costCenterSubtitle(tx: Tx, companyId: string, costCenterId?: string): Promise<BilingualText[]> {
+  async costCenterSubtitle(tx: Tx, companyId: string, costCenterId?: string): Promise<BilingualText[]> {
     if (!costCenterId) return [];
     const cc = await tx.maybeOne<{ code: string; name_ar: string; name_en: string }>('SELECT code, name_ar, name_en FROM gl.cost_centers WHERE company_id = $1 AND id = $2', [companyId, costCenterId]);
     return cc ? [t(`مركز التكلفة: ${cc.code} ${cc.name_ar}`, `Cost center: ${cc.code} ${cc.name_en}`)] : [];
   }
 
   /** Base-currency debit/credit per posting account from the balance summary, for periods matching the filter. */
-  private async sums(tx: Tx, companyId: string, periodFilter: string, filterParams: unknown[], ccIds: string[] | null): Promise<Map<string, DC>> {
+  async sums(tx: Tx, companyId: string, periodFilter: string, filterParams: unknown[], ccIds: string[] | null, excludeClosing = false): Promise<Map<string, DC>> {
     const ccParam = filterParams.length + 2;
     const rows = await tx.query<{ account_id: string; debit: string; credit: string }>(
       `SELECT b.account_id, sum(b.debit_base) AS debit, sum(b.credit_base) AS credit
-       FROM gl.account_balances b JOIN gl.fiscal_periods p ON p.id = b.period_id
+       FROM ${excludeClosing ? OPERATING_BALANCES : 'gl.account_balances'} b JOIN gl.fiscal_periods p ON p.id = b.period_id
        WHERE b.company_id = $1 AND ${periodFilter} AND ($${ccParam}::uuid[] IS NULL OR b.cost_center_id = ANY($${ccParam}))
        GROUP BY b.account_id`,
       [companyId, ...filterParams, ccIds],
@@ -802,7 +814,7 @@ const fixed = (values: Map<string, MoneyValue>, minor: number): Record<string, s
   Object.fromEntries([...values.entries()].map(([k, v]) => [k, v.toFixed(minor)]));
 
 /** In-memory chart of accounts with roll-up and ordered traversal. */
-class AccountTree {
+export class AccountTree {
   private readonly byId = new Map<string, Account>();
   private readonly children = new Map<string | null, Account[]>();
 

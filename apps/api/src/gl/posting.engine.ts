@@ -24,7 +24,11 @@ export type CompanyInfo = {
   base_currency: string;
   base_minor_units: number;
   require_approval: boolean;
+  approval_threshold: string | null;
   rounding_account_id: string | null;
+  retained_earnings_account_id: string | null;
+  fx_gain_account_id: string | null;
+  fx_loss_account_id: string | null;
 };
 
 export type EntryRow = {
@@ -39,6 +43,16 @@ export type EntryRow = {
   source_module: ModuleCode;
   created_by: string;
   version: number;
+  auto_reverse_date: string | null;
+};
+
+export type PostOptions = {
+  /** Keep stored base amounts instead of recomputing them from the rate (reversals, revaluation). */
+  preserveBase?: boolean;
+  /** Allow lines with a base amount but no transaction amount (FX revaluation adjustments). */
+  allowZeroTx?: boolean;
+  /** Engine-generated entry: control-account ownership and user cost-center scope do not apply. */
+  systemEntry?: boolean;
 };
 
 type LineRow = {
@@ -73,7 +87,8 @@ type CostCenterInfo = { id: string; code: string; is_posting: boolean; is_active
 
 export const loadCompany = async (tx: Tx, companyId: string): Promise<CompanyInfo> =>
   tx.one<CompanyInfo>(
-    `SELECT c.id, c.base_currency, cur.minor_units AS base_minor_units, c.require_approval, c.rounding_account_id
+    `SELECT c.id, c.base_currency, cur.minor_units AS base_minor_units, c.require_approval, c.approval_threshold,
+            c.rounding_account_id, c.retained_earnings_account_id, c.fx_gain_account_id, c.fx_loss_account_id
      FROM core.companies c JOIN core.currencies cur ON cur.code = c.base_currency WHERE c.id = $1`,
     [companyId],
   );
@@ -153,7 +168,7 @@ export class PostingEngine {
   async lockEntry(tx: Tx, companyId: string, entryId: string): Promise<EntryRow> {
     const entry = await tx.maybeOne<EntryRow>(
       `SELECT e.id, e.journal_type_id, jt.code AS journal_type_code, e.fiscal_year_id, fy.code AS fiscal_year_code,
-              e.period_id, e.entry_date, e.status, e.source_module, e.created_by, e.version
+              e.period_id, e.entry_date, e.status, e.source_module, e.created_by, e.version, e.auto_reverse_date
        FROM gl.journal_entries e
        JOIN gl.journal_types jt ON jt.id = e.journal_type_id
        JOIN gl.fiscal_years fy ON fy.id = e.fiscal_year_id
@@ -173,17 +188,17 @@ export class PostingEngine {
     const period = await this.period(tx, ctx.companyId, entry.period_id);
     await this.fiscal.assertPeriodOpen(tx, period, entry.source_module);
     const lines = await this.expandedLines(tx, ctx.companyId, company, entry.id);
-    await this.validateLines(tx, ctx, entry, lines);
+    await this.validateLines(tx, ctx, entry, lines, {});
     this.balance(company, lines, false);
   }
 
   /** Posts a validated-or-not entry; caller has locked it and checked the workflow transition. */
-  async post(tx: Tx, ctx: CompanyContext, company: CompanyInfo, entry: EntryRow, options: { preserveBase?: boolean } = {}): Promise<{ entry_no: string }> {
+  async post(tx: Tx, ctx: CompanyContext, company: CompanyInfo, entry: EntryRow, options: PostOptions = {}): Promise<{ entry_no: string }> {
     const period = await this.period(tx, ctx.companyId, entry.period_id);
     await this.fiscal.assertPeriodOpen(tx, period, entry.source_module);
 
     let lines = await this.expandedLines(tx, ctx.companyId, company, entry.id, options.preserveBase);
-    await this.validateLines(tx, ctx, entry, lines);
+    await this.validateLines(tx, ctx, entry, lines, options);
     const rounding = this.balance(company, lines, true);
     if (rounding) lines = [...lines, rounding];
 
@@ -209,7 +224,84 @@ export class PostingEngine {
       companyId: ctx.companyId,
       newData: { entry_no: entryNo, total: toStorage(totalDebit) },
     });
+    if (entry.auto_reverse_date) {
+      await this.reverse(tx, ctx, company, entry.id, {
+        date: entry.auto_reverse_date,
+        description: `عكس تلقائي للقيد ${entryNo} / Auto-reversal of ${entryNo}`,
+      });
+    }
     return { entry_no: entryNo };
+  }
+
+  /**
+   * Posts a mirror entry (debits and credits swapped, same rates and base amounts) and marks
+   * the original REVERSED. Returns the reversal's id.
+   */
+  async reverse(
+    tx: Tx,
+    ctx: CompanyContext,
+    company: CompanyInfo,
+    entryId: string,
+    input: { date?: string; description?: string; period?: PeriodRow },
+  ): Promise<string> {
+    const original = await this.lockEntry(tx, ctx.companyId, entryId);
+    if (original.status === 'REVERSED') throw new AppError('JOURNAL_ALREADY_REVERSED');
+    if (original.status !== 'POSTED') throw new AppError('JOURNAL_INVALID_TRANSITION', { action: 'reverse', status: original.status });
+
+    const header = await tx.one<{ entry_no: string; reference: string | null; source_doc_type: string | null; source_doc_id: string | null }>(
+      'SELECT entry_no, reference, source_doc_type, source_doc_id FROM gl.journal_entries WHERE id = $1',
+      [entryId],
+    );
+    // An explicit period lets year-end reversals land in the adjustment period rather than month 12.
+    const reversalDate = input.period?.end_date ?? input.date ?? original.entry_date;
+    const period = input.period ?? (await this.fiscal.resolvePeriod(tx, ctx.companyId, reversalDate));
+    const revType = await tx.one<{ id: string }>("SELECT id FROM gl.journal_types WHERE company_id = $1 AND code = 'REV'", [ctx.companyId]);
+    const reversal = await tx.one<{ id: string }>(
+      `INSERT INTO gl.journal_entries (tenant_id, company_id, journal_type_id, fiscal_year_id, period_id, entry_date,
+         description, reference, source_module, source_doc_type, source_doc_id, reversal_of_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [
+        ctx.tenantId,
+        ctx.companyId,
+        revType.id,
+        period.fiscal_year_id,
+        period.id,
+        reversalDate,
+        input.description ?? `عكس القيد ${header.entry_no} / Reversal of ${header.entry_no}`,
+        header.reference,
+        original.source_module,
+        header.source_doc_type,
+        header.source_doc_id,
+        entryId,
+        ctx.userId,
+      ],
+    );
+    const lines = await tx.query<{ id: string }>('SELECT id FROM gl.journal_lines WHERE entry_id = $1 ORDER BY line_no', [entryId]);
+    for (const line of lines) {
+      const copy = await tx.one<{ id: string }>(
+        `INSERT INTO gl.journal_lines (tenant_id, company_id, entry_id, line_no, account_id, cost_center_id, description,
+           currency_code, exchange_rate, debit, credit, debit_base, credit_base, is_rounding)
+         SELECT tenant_id, company_id, $2, line_no, account_id, cost_center_id, description, currency_code, exchange_rate,
+                credit, debit, credit_base, debit_base, is_rounding
+         FROM gl.journal_lines WHERE id = $1 RETURNING id`,
+        [line.id, reversal.id],
+      );
+      await tx.query(
+        `INSERT INTO gl.journal_line_dimensions (tenant_id, company_id, line_id, dimension_type_id, dimension_value_id)
+         SELECT tenant_id, company_id, $2, dimension_type_id, dimension_value_id FROM gl.journal_line_dimensions WHERE line_id = $1`,
+        [line.id, copy.id],
+      );
+    }
+    const reversalEntry = await this.lockEntry(tx, ctx.companyId, reversal.id);
+    // A reversal mirrors what was posted, so it is exempt from rules that may have changed since.
+    await this.post(tx, ctx, company, reversalEntry, { preserveBase: true, allowZeroTx: true, systemEntry: true });
+    await tx.query(
+      `UPDATE gl.journal_entries SET status = 'REVERSED', reversed_by_id = $3, updated_by = $4, version = version + 1
+       WHERE company_id = $1 AND id = $2`,
+      [ctx.companyId, entryId, reversal.id, ctx.userId],
+    );
+    await this.audit.record(tx, ctx, { action: 'reverse', entityType: 'journal_entry', entityId: entryId, companyId: ctx.companyId, newData: { reversal_id: reversal.id } });
+    return reversal.id;
   }
 
   // ---------------------------------------------------------------- internals
@@ -268,6 +360,7 @@ export class PostingEngine {
     ctx: CompanyContext,
     entry: EntryRow,
     lines: (LineRow & { dimensions: { dimension_type_id: string; dimension_value_id: string }[] })[],
+    options: PostOptions,
   ): Promise<void> {
     if (lines.length < 2) throw new AppError('JOURNAL_TOO_FEW_LINES');
 
@@ -314,27 +407,31 @@ export class PostingEngine {
         )
       ).map((r) => r.id),
     );
-    const scope = ctx.costCenterScope ? new Set(await descendantIds(tx, 'gl.cost_centers', ctx.companyId, ctx.costCenterScope)) : null;
+    const scope = ctx.costCenterScope && !options.systemEntry ? new Set(await descendantIds(tx, 'gl.cost_centers', ctx.companyId, ctx.costCenterScope)) : null;
 
     for (const [index, line] of lines.entries()) {
       const lineNo = index + 1;
       const account = accounts.get(line.account_id);
-      if (!account || !account.is_posting || !account.is_active) {
+      if (!account || !account.is_posting || (!account.is_active && !options.systemEntry)) {
         throw new AppError('LINE_ACCOUNT_INVALID', { line: lineNo, code: account?.code ?? '?' });
       }
       const debit = toMoney(line.debit);
       const credit = toMoney(line.credit);
-      if (debit.isNegative() || credit.isNegative() || debit.isZero() === credit.isZero()) {
-        throw new AppError('JOURNAL_LINE_AMOUNT', { line: lineNo });
-      }
+      const baseOnly = options.allowZeroTx && debit.isZero() && credit.isZero();
+      const amountsInvalid = baseOnly
+        ? toMoney(line.debit_base).isZero() === toMoney(line.credit_base).isZero()
+        : debit.isNegative() || credit.isNegative() || debit.isZero() === credit.isZero();
+      if (amountsInvalid) throw new AppError('JOURNAL_LINE_AMOUNT', { line: lineNo });
+      // Engine-generated entries derive from balances already in the ledger; master-data rules
+      // that may have changed since (inactive cost centers, new restrictions) do not apply to them.
+      if (line.is_rounding || options.systemEntry) continue;
+
       if (account.allowed_currencies && !account.allowed_currencies.includes(line.currency_code)) {
         throw new AppError('LINE_ACCOUNT_CURRENCY', { line: lineNo, code: account.code, currency: line.currency_code });
       }
       if (account.is_control && account.control_module !== entry.source_module) {
         throw new AppError('LINE_CONTROL_ACCOUNT', { line: lineNo, code: account.code, module: account.control_module ?? '' });
       }
-
-      if (line.is_rounding) continue;
 
       if (account.cost_center_rule === 'REQUIRED' && !line.cost_center_id) {
         throw new AppError('LINE_COST_CENTER_REQUIRED', { line: lineNo, code: account.code });

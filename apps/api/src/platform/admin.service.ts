@@ -61,7 +61,7 @@ export class AdminService {
         const used = await tx.maybeOne('SELECT 1 FROM gl.journal_entries WHERE company_id = $1 LIMIT 1', [id]);
         if (used) throw new AppError('VALIDATION_FAILED', {}, [{ path: 'base_currency', message: 'Base currency cannot change after entries exist' }]);
       }
-      for (const accountId of [input.rounding_account_id, input.retained_earnings_account_id]) {
+      for (const accountId of [input.rounding_account_id, input.retained_earnings_account_id, input.fx_gain_account_id, input.fx_loss_account_id]) {
         if (!accountId) continue;
         const account = await tx.maybeOne<{ is_posting: boolean; is_active: boolean }>(
           'SELECT is_posting, is_active FROM gl.accounts WHERE company_id = $1 AND id = $2',
@@ -73,7 +73,8 @@ export class AdminService {
       }
       const row = await tx.one(
         `UPDATE core.companies SET code = $2, name_ar = $3, name_en = $4, base_currency = $5, commercial_reg_no = $6, tax_no = $7,
-           fiscal_year_start_month = $8, require_approval = $9, rounding_account_id = $10, retained_earnings_account_id = $11, is_active = $12
+           fiscal_year_start_month = $8, require_approval = $9, rounding_account_id = $10, retained_earnings_account_id = $11, is_active = $12,
+           fx_gain_account_id = $13, fx_loss_account_id = $14, approval_threshold = $15
          WHERE id = $1 RETURNING *`,
         [
           id,
@@ -88,6 +89,9 @@ export class AdminService {
           input.rounding_account_id ?? null,
           input.retained_earnings_account_id ?? null,
           input.is_active,
+          input.fx_gain_account_id ?? null,
+          input.fx_loss_account_id ?? null,
+          input.approval_threshold ?? null,
         ],
       );
       await this.audit.record(tx, ctx, { action: 'update', entityType: 'company', entityId: id, companyId: id, oldData: existing, newData: input });

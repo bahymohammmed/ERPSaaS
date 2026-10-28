@@ -81,6 +81,9 @@ export const companySchema = z
     require_approval: z.boolean().default(false),
     rounding_account_id: uuidSchema.nullish(),
     retained_earnings_account_id: uuidSchema.nullish(),
+    fx_gain_account_id: uuidSchema.nullish(),
+    fx_loss_account_id: uuidSchema.nullish(),
+    approval_threshold: amountSchema.nullish(),
     is_active: z.boolean().default(true),
   })
   .refine(requireOneName, nameIssue);
@@ -126,6 +129,7 @@ export const accountSchema = z
     allowed_currencies: z.array(currencyCodeSchema).nullish(),
     cash_flow_category: z.enum(CASH_FLOW_CATEGORIES).nullish(),
     is_reconcilable: z.boolean().default(false),
+    revalue: z.boolean().default(false),
     is_active: z.boolean().default(true),
     dimension_rules: z
       .array(z.object({ dimension_type_id: uuidSchema, rule: z.enum(DIMENSION_RULES) }))
@@ -239,6 +243,8 @@ export const journalEntrySchema = z.object({
   adjustment_period: z.boolean().default(false),
   description: z.string().trim().max(1000).nullish(),
   reference: z.string().trim().max(100).nullish(),
+  /** Accrual: a reversal is posted automatically on this date. */
+  auto_reverse_date: dateSchema.nullish(),
   lines: z.array(journalLineSchema).min(2).max(2000),
   version: z.number().int().optional(),
 });
@@ -333,3 +339,154 @@ export const balanceSheetQuerySchema = z.object({
   compare: z.enum(['none', 'prior_year']).default('none'),
   ...reportFormat,
 });
+
+// ---------- Phase 2 ----------
+
+export const RECURRENCE_FREQUENCIES = ['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY'] as const;
+export type RecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
+
+export const recurringSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    frequency: z.enum(RECURRENCE_FREQUENCIES),
+    day_of_month: z.number().int().min(1).max(31),
+    start_date: dateSchema,
+    end_date: dateSchema.nullish(),
+    auto_post: z.boolean().default(true),
+    is_active: z.boolean().default(true),
+    /** On create: copy journal type, description and lines from this entry. */
+    from_entry_id: uuidSchema.optional(),
+  })
+  .refine(requireOneName, nameIssue)
+  .refine((v) => !v.end_date || v.end_date >= v.start_date, { message: 'end_date before start_date', path: ['end_date'] });
+export type RecurringInput = z.infer<typeof recurringSchema>;
+
+export const fxRevaluationSchema = z.object({
+  revaluation_date: dateSchema,
+  rate_type: z.enum(RATE_TYPES).default('CLOSING'),
+  auto_reverse: z.boolean().default(true),
+});
+
+export const driverSchema = z
+  .object({ code: codeSchema, ...bilingualNames, unit: z.string().trim().max(30).default(''), is_active: z.boolean().default(true) })
+  .refine(requireOneName, nameIssue);
+
+export const driverValuesSchema = z.object({
+  period_id: uuidSchema,
+  values: z.array(z.object({ cost_center_id: uuidSchema, value: amountSchema })),
+});
+
+export const allocationRuleSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    step_no: z.number().int().min(1).max(99).default(1),
+    method: z.enum(['FIXED', 'DRIVER']),
+    driver_id: uuidSchema.nullish(),
+    source_account_ids: z.array(uuidSchema).min(1),
+    source_cost_center_ids: z.array(uuidSchema).min(1),
+    target_account_id: uuidSchema.nullish(),
+    is_active: z.boolean().default(true),
+    targets: z.array(z.object({ cost_center_id: uuidSchema, percent: amountSchema.nullish() })).min(1),
+  })
+  .refine(requireOneName, nameIssue)
+  .refine((v) => v.method !== 'DRIVER' || !!v.driver_id, { message: 'Driver is required', path: ['driver_id'] });
+export type AllocationRuleInput = z.infer<typeof allocationRuleSchema>;
+
+export const periodRefSchema = z.object({ period_id: uuidSchema });
+
+export const budgetSchema = z
+  .object({ code: codeSchema, ...bilingualNames, fiscal_year_id: uuidSchema })
+  .refine(requireOneName, nameIssue);
+
+export const budgetLinesSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        account_id: uuidSchema,
+        cost_center_id: uuidSchema.nullish(),
+        period_id: uuidSchema,
+        amount: z
+          .union([z.string(), z.number()])
+          .transform((v) => (typeof v === 'number' ? String(v) : v.trim() || '0'))
+          .refine((v) => /^-?\d{1,15}(\.\d{1,4})?$/.test(v), { message: 'Invalid amount' }),
+      }),
+    )
+    .max(20000),
+});
+
+export const budgetGenerateSchema = z.object({
+  source_fiscal_year_id: uuidSchema,
+  adjust_percent: z.coerce.number().min(-100).max(1000).default(0),
+  by_cost_center: z.boolean().default(true),
+});
+
+export const appropriationRuleSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    sequence: z.number().int().min(1).max(99).default(1),
+    stage: z.enum(['EXPENSE', 'RESERVE']),
+    base: z.enum(['PROFIT', 'AFTER_RESERVE']).default('PROFIT'),
+    percent: amountSchema,
+    cap_percent_of_capital: amountSchema.nullish(),
+    capital_account_id: uuidSchema.nullish(),
+    debit_account_id: uuidSchema,
+    credit_account_id: uuidSchema,
+    is_active: z.boolean().default(true),
+  })
+  .refine(requireOneName, nameIssue);
+export type AppropriationRuleInput = z.infer<typeof appropriationRuleSchema>;
+
+export const yearEndSchema = z.object({ fiscal_year_id: uuidSchema, apply_appropriations: z.boolean().default(true) });
+
+export const STATEMENT_ROW_TYPES = ['HEADER', 'ACCOUNTS', 'FORMULA', 'RESULT', 'SPACER'] as const;
+
+export const statementSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    basis: z.enum(['PERIOD', 'POSITION']),
+    is_active: z.boolean().default(true),
+    rows: z
+      .array(
+        z.object({
+          row_key: z.string().trim().max(30).regex(/^[A-Za-z0-9_]*$/).nullish(),
+          label_ar: z.string().trim().max(200).default(''),
+          label_en: z.string().trim().max(200).default(''),
+          row_type: z.enum(STATEMENT_ROW_TYPES),
+          accounts: z.string().trim().max(1000).nullish(),
+          sign: z.enum(['DEBIT', 'CREDIT']).default('CREDIT'),
+          formula: z.string().trim().max(500).nullish(),
+          show_detail: z.boolean().default(false),
+          bold: z.boolean().default(false),
+          indent: z.number().int().min(0).max(5).default(0),
+        }),
+      )
+      .min(1)
+      .max(300),
+  })
+  .refine(requireOneName, nameIssue);
+export type StatementInput = z.infer<typeof statementSchema>;
+
+export const budgetVsActualQuerySchema = z.object({
+  budget_id: uuidSchema,
+  from_period_id: uuidSchema,
+  to_period_id: uuidSchema,
+  cost_center_id: uuidSchema.optional(),
+  level: z.coerce.number().int().min(1).max(20).optional(),
+  ...reportFormat,
+});
+
+export const statementQuerySchema = z.object({
+  statement_id: uuidSchema,
+  from_period_id: uuidSchema.optional(),
+  to_period_id: uuidSchema.optional(),
+  period_id: uuidSchema.optional(),
+  cost_center_id: uuidSchema.optional(),
+  compare: z.enum(['none', 'prior_year']).default('none'),
+  ...reportFormat,
+});
+
+export const voucherQuerySchema = z.object({ ...reportFormat });

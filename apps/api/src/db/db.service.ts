@@ -63,6 +63,21 @@ export class DbService implements OnModuleDestroy {
     return this.transaction(fn, ctx);
   }
 
+  /** Runs fn with tenant context and always rolls back: used for previews that execute the real logic. */
+  async previewWithTenant<T>(ctx: TenantContext, fn: (tx: Tx) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.tenant_id', $1, true), set_config('app.user_id', $2, true)", [ctx.tenantId, ctx.userId ?? '']);
+      return await fn(new Tx(client));
+    } catch (error) {
+      throw translatePgError(error);
+    } finally {
+      await client.query('ROLLBACK').catch(() => undefined);
+      client.release();
+    }
+  }
+
   /** Transaction without tenant context: only SECURITY DEFINER helpers and global tables are usable. */
   async withoutTenant<T>(fn: (tx: Tx) => Promise<T>, userId: string | null = null): Promise<T> {
     return this.transaction(fn, { tenantId: '', userId });

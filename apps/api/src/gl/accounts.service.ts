@@ -22,12 +22,13 @@ export type AccountRow = {
   allowed_currencies: string[] | null;
   cash_flow_category: string | null;
   is_reconcilable: boolean;
+  revalue: boolean;
   is_active: boolean;
 };
 
 const ACCOUNT_COLUMNS = `a.id, a.code, a.name_ar, a.name_en, a.parent_id, a.is_posting, a.account_type, a.normal_balance,
   a.cost_center_rule, a.default_cost_center_id, a.is_control, a.control_module, a.allowed_currencies,
-  a.cash_flow_category, a.is_reconcilable, a.is_active`;
+  a.cash_flow_category, a.is_reconcilable, a.revalue, a.is_active`;
 
 @Injectable()
 export class AccountsService {
@@ -68,48 +69,52 @@ export class AccountsService {
   }
 
   create(ctx: CompanyContext, input: AccountInput) {
-    return this.db.withTenant(ctx, async (tx) => {
-      await this.validateParent(tx, ctx.companyId, input, null);
-      const row = await tx.one<AccountRow>(
-        `INSERT INTO gl.accounts (tenant_id, company_id, code, name_ar, name_en, parent_id, is_posting, account_type,
-           normal_balance, cost_center_rule, default_cost_center_id, is_control, control_module, allowed_currencies,
-           cash_flow_category, is_reconcilable, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-         RETURNING ${ACCOUNT_COLUMNS.replace(/a\./g, '')}`,
-        [ctx.tenantId, ctx.companyId, ...this.values(input)],
-      );
-      await this.replaceRules(tx, ctx, row.id, input);
-      await this.audit.record(tx, ctx, { action: 'create', entityType: 'account', entityId: row.id, companyId: ctx.companyId, newData: input });
-      return row;
-    });
+    return this.db.withTenant(ctx, (tx) => this.createTx(tx, ctx, input));
+  }
+
+  async createTx(tx: Tx, ctx: CompanyContext, input: AccountInput): Promise<AccountRow> {
+    await this.validateParent(tx, ctx.companyId, input, null);
+    const row = await tx.one<AccountRow>(
+      `INSERT INTO gl.accounts (tenant_id, company_id, code, name_ar, name_en, parent_id, is_posting, account_type,
+         normal_balance, cost_center_rule, default_cost_center_id, is_control, control_module, allowed_currencies,
+         cash_flow_category, is_reconcilable, is_active, revalue)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       RETURNING ${ACCOUNT_COLUMNS.replace(/a\./g, '')}`,
+      [ctx.tenantId, ctx.companyId, ...this.values(input)],
+    );
+    await this.replaceRules(tx, ctx, row.id, input);
+    await this.audit.record(tx, ctx, { action: 'create', entityType: 'account', entityId: row.id, companyId: ctx.companyId, newData: input });
+    return row;
   }
 
   update(ctx: CompanyContext, id: string, input: AccountInput) {
-    return this.db.withTenant(ctx, async (tx) => {
-      const existing = await this.find(tx, ctx.companyId, id, true);
-      await this.validateParent(tx, ctx.companyId, input, id);
+    return this.db.withTenant(ctx, (tx) => this.updateTx(tx, ctx, id, input));
+  }
 
-      const hasTransactions = await this.hasTransactions(tx, ctx.companyId, id);
-      if (hasTransactions && (existing.account_type !== input.account_type || !input.is_posting)) {
-        throw new AppError('ACCOUNT_HAS_TRANSACTIONS', { code: existing.code });
-      }
-      if (input.is_posting && !existing.is_posting) {
-        const child = await tx.maybeOne('SELECT 1 FROM gl.accounts WHERE company_id = $1 AND parent_id = $2 LIMIT 1', [ctx.companyId, id]);
-        if (child) throw new AppError('ACCOUNT_HAS_CHILDREN', { code: existing.code });
-      }
+  async updateTx(tx: Tx, ctx: CompanyContext, id: string, input: AccountInput): Promise<AccountRow> {
+    const existing = await this.find(tx, ctx.companyId, id, true);
+    await this.validateParent(tx, ctx.companyId, input, id);
 
-      const row = await tx.one<AccountRow>(
-        `UPDATE gl.accounts SET code = $3, name_ar = $4, name_en = $5, parent_id = $6, is_posting = $7, account_type = $8,
-           normal_balance = $9, cost_center_rule = $10, default_cost_center_id = $11, is_control = $12, control_module = $13,
-           allowed_currencies = $14, cash_flow_category = $15, is_reconcilable = $16, is_active = $17
-         WHERE company_id = $1 AND id = $2
-         RETURNING ${ACCOUNT_COLUMNS.replace(/a\./g, '')}`,
-        [ctx.companyId, id, ...this.values(input)],
-      );
-      await this.replaceRules(tx, ctx, id, input);
-      await this.audit.record(tx, ctx, { action: 'update', entityType: 'account', entityId: id, companyId: ctx.companyId, oldData: existing, newData: input });
-      return row;
-    });
+    const hasTransactions = await this.hasTransactions(tx, ctx.companyId, id);
+    if (hasTransactions && (existing.account_type !== input.account_type || !input.is_posting)) {
+      throw new AppError('ACCOUNT_HAS_TRANSACTIONS', { code: existing.code });
+    }
+    if (input.is_posting && !existing.is_posting) {
+      const child = await tx.maybeOne('SELECT 1 FROM gl.accounts WHERE company_id = $1 AND parent_id = $2 LIMIT 1', [ctx.companyId, id]);
+      if (child) throw new AppError('ACCOUNT_HAS_CHILDREN', { code: existing.code });
+    }
+
+    const row = await tx.one<AccountRow>(
+      `UPDATE gl.accounts SET code = $3, name_ar = $4, name_en = $5, parent_id = $6, is_posting = $7, account_type = $8,
+         normal_balance = $9, cost_center_rule = $10, default_cost_center_id = $11, is_control = $12, control_module = $13,
+         allowed_currencies = $14, cash_flow_category = $15, is_reconcilable = $16, is_active = $17, revalue = $18
+       WHERE company_id = $1 AND id = $2
+       RETURNING ${ACCOUNT_COLUMNS.replace(/a\./g, '')}`,
+      [ctx.companyId, id, ...this.values(input)],
+    );
+    await this.replaceRules(tx, ctx, id, input);
+    await this.audit.record(tx, ctx, { action: 'update', entityType: 'account', entityId: id, companyId: ctx.companyId, oldData: existing, newData: input });
+    return row;
   }
 
   remove(ctx: CompanyContext, id: string) {
@@ -141,6 +146,7 @@ export class AccountsService {
       input.cash_flow_category ?? null,
       input.is_reconcilable,
       input.is_active,
+      input.revalue,
     ];
   }
 

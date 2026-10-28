@@ -7,6 +7,14 @@ import { ErrorFilter } from './common/error.filter';
 import { TokenService } from './common/token.service';
 import { DbService } from './db/db.service';
 import { AccountsService } from './gl/accounts.service';
+import { AllocationService } from './gl/allocation.service';
+import { AnalysisReportsService } from './gl/analysis-reports.service';
+import { BudgetsService } from './gl/budgets.service';
+import { FxRevaluationService } from './gl/fx-revaluation.service';
+import { ImportService } from './gl/import.service';
+import { Phase2Controller } from './gl/phase2.controller';
+import { RecurringScheduler, RecurringService } from './gl/recurring.service';
+import { YearEndService } from './gl/year-end.service';
 import { AttachmentsService } from './gl/attachments.service';
 import { CostCentersService } from './gl/cost-centers.service';
 import { ExportService } from './gl/export/export.service';
@@ -37,7 +45,7 @@ class HealthController {
 }
 
 @Module({
-  controllers: [HealthController, AuthController, AdminController, MasterDataController, JournalsController, ReportsController],
+  controllers: [HealthController, AuthController, AdminController, MasterDataController, JournalsController, ReportsController, Phase2Controller],
   providers: [
     DbService,
     TokenService,
@@ -54,6 +62,14 @@ class HealthController {
     AttachmentsService,
     ReportsService,
     ExportService,
+    RecurringService,
+    RecurringScheduler,
+    FxRevaluationService,
+    AllocationService,
+    BudgetsService,
+    YearEndService,
+    AnalysisReportsService,
+    ImportService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_FILTER, useClass: ErrorFilter },
   ],

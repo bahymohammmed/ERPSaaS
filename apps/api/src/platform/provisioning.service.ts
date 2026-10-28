@@ -4,9 +4,12 @@ import type { Tx } from '../db/db.service';
 import {
   DEFAULT_JOURNAL_TYPES,
   KUWAIT_IFRS_COA,
+  TEMPLATE_FX_GAIN_ACCOUNT,
+  TEMPLATE_FX_LOSS_ACCOUNT,
   TEMPLATE_RETAINED_EARNINGS_ACCOUNT,
   TEMPLATE_ROUNDING_ACCOUNT,
 } from '../db/seed/coa-kuwait';
+import { ensureCompanyDefaults } from '../gl/defaults';
 import { FiscalService } from '../gl/fiscal.service';
 
 export type NewCompany = {
@@ -100,8 +103,8 @@ export class ProvisioningService {
     for (const a of KUWAIT_IFRS_COA) {
       const row = await tx.one<{ id: string }>(
         `INSERT INTO gl.accounts (tenant_id, company_id, code, name_ar, name_en, parent_id, is_posting, account_type, normal_balance,
-           cost_center_rule, is_control, control_module, cash_flow_category, is_reconcilable)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+           cost_center_rule, is_control, control_module, cash_flow_category, is_reconcilable, revalue)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
         [
           tenantId,
           companyId,
@@ -117,14 +120,16 @@ export class ProvisioningService {
           a.control ?? null,
           a.cashFlow ?? null,
           a.reconcilable ?? false,
+          a.revalue ?? false,
         ],
       );
       ids.set(a.code, row.id);
     }
-    await tx.query('UPDATE core.companies SET rounding_account_id = $2, retained_earnings_account_id = $3 WHERE id = $1', [
-      companyId,
-      ids.get(TEMPLATE_ROUNDING_ACCOUNT),
-      ids.get(TEMPLATE_RETAINED_EARNINGS_ACCOUNT),
-    ]);
+    await tx.query(
+      `UPDATE core.companies SET rounding_account_id = $2, retained_earnings_account_id = $3, fx_gain_account_id = $4, fx_loss_account_id = $5
+       WHERE id = $1`,
+      [companyId, ids.get(TEMPLATE_ROUNDING_ACCOUNT), ids.get(TEMPLATE_RETAINED_EARNINGS_ACCOUNT), ids.get(TEMPLATE_FX_GAIN_ACCOUNT), ids.get(TEMPLATE_FX_LOSS_ACCOUNT)],
+    );
+    await ensureCompanyDefaults(tx, tenantId, companyId);
   }
 }
