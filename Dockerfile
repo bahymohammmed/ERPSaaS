@@ -32,7 +32,7 @@ COPY --from=build /out/api api
 COPY --from=build /app/apps/web/.next/standalone web
 COPY --from=build /app/apps/web/.next/static web/apps/web/.next/static
 COPY deploy/start.sh /app/start.sh
-RUN mkdir -p /data/storage && chown -R node:node /data && chmod +x /app/start.sh
+RUN mkdir -p /data/storage && chown -R node:node /data && sed -i "s/\r$//" /app/start.sh && chmod +x /app/start.sh
 USER node
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini", "--"]
