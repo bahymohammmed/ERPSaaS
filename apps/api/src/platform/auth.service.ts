@@ -9,11 +9,14 @@ import { AuditService } from '../common/audit.service';
 import type { RequestContext } from '../common/request-context';
 import { TokenService } from '../common/token.service';
 import { decryptSecret, encryptSecret, generateSecret, otpauthUrl, verifyTotp } from '../common/totp';
-import { DbService } from '../db/db.service';
+import { DbService, type Tx } from '../db/db.service';
 import { ProvisioningService } from './provisioning.service';
 
 type TenantSummary = { tenant_id: string; tenant_name: string };
-export type Session = { token: string; tenantId: string; tenants: TenantSummary[] };
+/** platform: a platform console session (no tenant). */
+export type Session = { token: string; tenantId: string | null; tenants: TenantSummary[]; platform?: boolean };
+/** Whoever manages their own 2FA: a tenant member, or a platform admin (tenantId null). */
+type MfaActor = { userId: string; tenantId: string | null; ip: string };
 
 @Injectable()
 export class AuthService {
@@ -48,19 +51,21 @@ export class AuthService {
         input.fullName,
         input.locale,
       ]);
-      await tx.query('INSERT INTO core.tenants (id, name) VALUES ($1, $2)', [tenantId, input.tenantName]);
-      const roles = await this.provisioning.createSystemRoles(tx, tenantId);
-      await tx.query('INSERT INTO core.tenant_users (tenant_id, user_id, role_id) VALUES ($1, $2, $3)', [tenantId, userId, roles.ADMIN]);
-      const company = await this.provisioning.createCompany(tx, tenantId, {
-        code: input.companyCode,
-        name_ar: input.companyNameAr || input.tenantName,
-        name_en: input.companyNameEn || input.tenantName,
-        base_currency: input.baseCurrency,
-        fiscal_year_start_month: input.fiscalYearStartMonth,
-        first_fiscal_year: input.firstFiscalYear,
-        seed_chart_of_accounts: input.seedChartOfAccounts,
+      const { companyId } = await this.provisioning.createTenant(tx, {
+        id: tenantId,
+        name: input.tenantName,
+        admin_user_id: userId,
+        company: {
+          code: input.companyCode,
+          name_ar: input.companyNameAr || input.tenantName,
+          name_en: input.companyNameEn || input.tenantName,
+          base_currency: input.baseCurrency,
+          fiscal_year_start_month: input.fiscalYearStartMonth,
+          first_fiscal_year: input.firstFiscalYear,
+          seed_chart_of_accounts: input.seedChartOfAccounts,
+        },
       });
-      await this.audit.record(tx, { tenantId, userId, ip }, { action: 'signup', entityType: 'tenant', entityId: tenantId, companyId: company.id });
+      await this.audit.record(tx, { tenantId, userId, ip }, { action: 'signup', entityType: 'tenant', entityId: tenantId, companyId });
     });
 
     return { token: this.tokens.sign({ sub: userId, tid: tenantId }), tenantId, tenants: [{ tenant_id: tenantId, tenant_name: input.tenantName }] };
@@ -79,6 +84,12 @@ export class AuthService {
     if (user.mfa_enabled && user.mfa_secret) {
       if (!input.otp) throw new AppError('MFA_REQUIRED');
       if (!verifyTotp(decryptSecret(user.mfa_secret), input.otp)) throw new AppError('MFA_INVALID');
+    }
+
+    const platform = await this.db.withoutTenant((tx) => tx.one<{ ok: boolean }>('SELECT core.is_platform_admin($1) AS ok', [user.user_id]));
+    if (platform.ok) {
+      await this.db.withoutTenant((tx) => tx.query('UPDATE core.users SET last_login_at = now() WHERE id = $1', [user.user_id]), user.user_id);
+      return { token: this.tokens.signPlatform(user.user_id), tenantId: null, tenants: [], platform: true };
     }
 
     const tenants = await this.tenantsOf(user.user_id);
@@ -131,8 +142,8 @@ export class AuthService {
   }
 
   /** Starts enrolment: stores a new (not yet active) secret and returns it for the authenticator app. */
-  setupMfa(ctx: RequestContext) {
-    return this.db.withTenant(ctx, async (tx) => {
+  setupMfa(ctx: MfaActor) {
+    return this.asActor(ctx, async (tx) => {
       const user = await tx.one<{ email: string; mfa_enabled: boolean }>('SELECT email, mfa_enabled FROM core.users WHERE id = $1', [ctx.userId]);
       if (user.mfa_enabled) throw new AppError('VALIDATION_FAILED', {}, [{ path: 'mfa', message: 'Two-factor authentication is already enabled' }]);
       const secret = generateSecret();
@@ -141,24 +152,33 @@ export class AuthService {
     });
   }
 
-  enableMfa(ctx: RequestContext, code: string) {
-    return this.db.withTenant(ctx, async (tx) => {
+  enableMfa(ctx: MfaActor, code: string) {
+    return this.asActor(ctx, async (tx) => {
       const user = await tx.one<{ mfa_secret: string | null }>('SELECT mfa_secret FROM core.users WHERE id = $1', [ctx.userId]);
       if (!user.mfa_secret || !verifyTotp(decryptSecret(user.mfa_secret), code)) throw new AppError('MFA_INVALID');
       await tx.query('UPDATE core.users SET mfa_enabled = true WHERE id = $1', [ctx.userId]);
-      await this.audit.record(tx, ctx, { action: 'mfa_enable', entityType: 'user', entityId: ctx.userId });
+      await this.auditActor(tx, ctx, 'mfa_enable');
       return { mfa_enabled: true };
     });
   }
 
-  disableMfa(ctx: RequestContext, code: string) {
-    return this.db.withTenant(ctx, async (tx) => {
+  disableMfa(ctx: MfaActor, code: string) {
+    return this.asActor(ctx, async (tx) => {
       const user = await tx.one<{ mfa_secret: string | null; mfa_enabled: boolean }>('SELECT mfa_secret, mfa_enabled FROM core.users WHERE id = $1', [ctx.userId]);
       if (!user.mfa_enabled || !user.mfa_secret || !verifyTotp(decryptSecret(user.mfa_secret), code)) throw new AppError('MFA_INVALID');
       await tx.query('UPDATE core.users SET mfa_enabled = false, mfa_secret = NULL WHERE id = $1', [ctx.userId]);
-      await this.audit.record(tx, ctx, { action: 'mfa_disable', entityType: 'user', entityId: ctx.userId });
+      await this.auditActor(tx, ctx, 'mfa_disable');
       return { mfa_enabled: false };
     });
+  }
+
+  private asActor<T>(ctx: MfaActor, fn: (tx: Tx) => Promise<T>): Promise<T> {
+    return ctx.tenantId ? this.db.withTenant({ tenantId: ctx.tenantId, userId: ctx.userId }, fn) : this.db.withoutTenant(fn, ctx.userId);
+  }
+
+  /** The audit trail is per tenant; platform admins' own security changes are not recorded there. */
+  private async auditActor(tx: Tx, ctx: MfaActor, action: string): Promise<void> {
+    if (ctx.tenantId) await this.audit.record(tx, { ...ctx, tenantId: ctx.tenantId }, { action, entityType: 'user', entityId: ctx.userId });
   }
 
   private tenantsOf(userId: string): Promise<TenantSummary[]> {

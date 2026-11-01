@@ -130,7 +130,11 @@ export class AdminService {
       if (limits.count >= limits.max_users) throw new AppError('PLAN_LIMIT_REACHED', { resource: 'users' });
       await this.assertRole(tx, input.role_id);
 
-      const found = await tx.one<{ id: string | null }>('SELECT core.find_user_id($1) AS id', [input.email]);
+      const found = await tx.one<{ id: string | null; platform: boolean }>(
+        'SELECT core.find_user_id($1) AS id, core.is_platform_admin(core.find_user_id($1)) AS platform',
+        [input.email],
+      );
+      if (found.platform) throw new AppError('PLATFORM_ADMIN_ACCOUNT');
       let userId = found.id;
       let created = false;
       if (!userId) {

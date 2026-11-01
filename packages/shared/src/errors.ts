@@ -80,6 +80,8 @@ export const ERROR_MESSAGES = {
   IC_CURRENCY_MISMATCH: { en: 'Both companies must share the same base currency', ar: 'يجب أن تكون للشركتين نفس العملة الأساسية' },
   MFA_REQUIRED: { en: 'Enter the code from your authenticator app', ar: 'أدخل الرمز من تطبيق المصادقة' },
   MFA_INVALID: { en: 'The verification code is not valid', ar: 'رمز التحقق غير صحيح' },
+  SIGNUP_DISABLED: { en: 'Self-service sign-up is closed; contact the service provider for an account', ar: 'التسجيل الذاتي مغلق؛ تواصل مع مزود الخدمة للحصول على حساب' },
+  PLATFORM_ADMIN_ACCOUNT: { en: 'Platform administrator accounts cannot be members of a tenant', ar: 'حسابات مدير المنصة لا يمكن أن تكون أعضاء في مؤسسة' },
   RATE_LIMITED: { en: 'Too many requests; try again shortly', ar: 'طلبات كثيرة جداً؛ حاول مرة أخرى بعد قليل' },
   OUT_OF_SCOPE: { en: 'This record is outside your cost center access', ar: 'هذا السجل خارج صلاحيات مراكز التكلفة الخاصة بك' },
   INTERNAL: { en: 'Unexpected error', ar: 'حدث خطأ غير متوقع' },

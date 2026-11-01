@@ -3,6 +3,7 @@
 set -e
 # Optional, for self-hosting and local trials (the Cloudflare workflow migrates from CI instead).
 if [ "$RUN_MIGRATIONS" = "true" ]; then node /app/api/dist/db/migrate.cli.js; fi
+if [ -n "$PLATFORM_ADMIN_EMAIL" ]; then node /app/api/dist/db/platform-admin.cli.js; fi
 if [ "$SEED_DEMO" = "true" ]; then RECURRING_SCHEDULER=off node /app/api/dist/db/seed-demo.cli.js; fi
 node /app/api/dist/main.js &
 API=$!

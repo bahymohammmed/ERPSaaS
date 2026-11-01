@@ -1,7 +1,7 @@
 'use client';
 
 import { Anchor, Button, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -18,14 +18,15 @@ const LoginPage = () => {
   const [busy, setBusy] = useState(false);
   const [otp, setOtp] = useState('');
   const [needsOtp, setNeedsOtp] = useState(false);
+  const publicConfig = useQuery({ queryKey: ['public-config'], queryFn: () => api<{ signup: boolean }>('/auth/config') });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     try {
-      await api('/auth/login', { method: 'POST', body: { email, password, ...(needsOtp ? { otp } : {}) } });
+      const session = await api<{ platform?: boolean }>('/auth/login', { method: 'POST', body: { email, password, ...(needsOtp ? { otp } : {}) } });
       queryClient.clear();
-      router.replace('/dashboard');
+      router.replace(session.platform ? '/platform' : '/dashboard');
     } catch (error) {
       if (error instanceof ApiError && error.code === 'MFA_REQUIRED') {
         setNeedsOtp(true);
@@ -57,9 +58,11 @@ const LoginPage = () => {
             />
           )}
           <Button type="submit" loading={busy} disabled={needsOtp && otp.length !== 6}>{t('signIn')}</Button>
-          <Text size="sm">
-            <Anchor component={Link} href="/signup">{t('noAccount')}</Anchor>
-          </Text>
+          {publicConfig.data?.signup && (
+            <Text size="sm">
+              <Anchor component={Link} href="/signup">{t('noAccount')}</Anchor>
+            </Text>
+          )}
         </Stack>
       </form>
     </Paper>

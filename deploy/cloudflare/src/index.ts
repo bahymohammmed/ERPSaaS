@@ -5,6 +5,8 @@ type Env = {
   DATABASE_URL: string;
   JWT_SECRET: string;
   MFA_ENCRYPTION_KEY: string;
+  /** Optional var: 'on' allows self-service sign-up. */
+  PUBLIC_SIGNUP?: string;
 };
 
 /** The ERP image (see the repository Dockerfile): web app on 3000, API on 4000 behind it. */
@@ -22,6 +24,8 @@ export class ErpContainer extends Container<Env> {
       // The container disk does not survive a restart.
       ATTACHMENT_STORAGE: 'database',
       CLIENT_IP_HEADER: CLIENT_IP_HEADER,
+      // Customers get accounts from the platform console, not by signing up themselves.
+      PUBLIC_SIGNUP: env.PUBLIC_SIGNUP ?? 'off',
     };
   }
 }

@@ -12,6 +12,9 @@ export type RequestContext = {
   ip: string;
 };
 
+/** A platform administrator acting from the platform console (no tenant). */
+export type PlatformContext = { userId: string; ip: string };
+
 export type CompanyContext = RequestContext & { companyId: string };
 
 export const requireCompany = (ctx: RequestContext): CompanyContext => {

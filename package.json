@@ -11,6 +11,7 @@
     "dev:api": "pnpm --filter @erp/api dev",
     "dev:web": "pnpm --filter @erp/web dev",
     "test": "pnpm --filter @erp/shared test && pnpm --filter @erp/api test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "platform:admin": "pnpm --filter @erp/api platform:admin"
   }
 }

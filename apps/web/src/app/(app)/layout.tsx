@@ -22,6 +22,7 @@ import {
   IconCoins,
   IconFileInvoice,
   IconHierarchy2,
+  IconHelpCircle,
   IconHistory,
   IconLayoutDashboard,
   IconListDetails,
@@ -34,6 +35,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
+import { HelpButton } from '@/components/HelpButton';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { MfaModal } from '@/components/MfaModal';
 import { useI18n } from '@/i18n/i18n';
@@ -161,6 +163,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
               onChange={(v) => v && selectCompany(v)}
               allowDeselect={false}
             />
+            <HelpButton />
             <LanguageToggle />
             <Menu position="bottom-end" withinPortal>
               <Menu.Target>
@@ -190,6 +193,9 @@ const Shell = ({ children }: { children: ReactNode }) => {
                 )}
                 <Menu.Item leftSection={<IconShieldCheck size={14} />} onClick={openMfa}>
                   {t('twoFactor')}
+                </Menu.Item>
+                <Menu.Item leftSection={<IconHelpCircle size={14} />} component={Link} href="/help" target="_blank">
+                  {t('userGuide')}
                 </Menu.Item>
                 <Menu.Divider />
                 <Menu.Label>{t('digitStyle')}</Menu.Label>

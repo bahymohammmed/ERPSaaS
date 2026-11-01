@@ -9,7 +9,17 @@ import { api } from '@/lib/api';
 import { notifyError, notifySuccess } from './notify';
 
 /** Enrol or remove TOTP two-factor authentication for the signed-in user. */
-export const MfaModal = ({ opened, enabled, onClose }: { opened: boolean; enabled: boolean; onClose: () => void }) => {
+type Props = {
+  opened: boolean;
+  enabled: boolean;
+  onClose: () => void;
+  /** '/platform/mfa' for platform administrators. */
+  basePath?: string;
+  /** Session query to refresh afterwards. */
+  sessionKey?: string;
+};
+
+export const MfaModal = ({ opened, enabled, onClose, basePath = '/auth/mfa', sessionKey = 'me' }: Props) => {
   const { t, errorText } = useI18n();
   const queryClient = useQueryClient();
   const [setup, setSetup] = useState<{ secret: string; qr: string } | null>(null);
@@ -29,17 +39,17 @@ export const MfaModal = ({ opened, enabled, onClose }: { opened: boolean; enable
 
   const start = () =>
     call(async () => {
-      const result = await api<{ secret: string; otpauth_url: string }>('/auth/mfa/setup', { method: 'POST' });
+      const result = await api<{ secret: string; otpauth_url: string }>(`${basePath}/setup`, { method: 'POST' });
       setSetup({ secret: result.secret, qr: await QRCode.toDataURL(result.otpauth_url, { margin: 1, width: 220 }) });
     });
 
   const finish = (action: 'enable' | 'disable') =>
     call(async () => {
-      await api(`/auth/mfa/${action}`, { method: 'POST', body: { code } });
+      await api(`${basePath}/${action}`, { method: 'POST', body: { code } });
       notifySuccess(t('saved'));
       setSetup(null);
       setCode('');
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      await queryClient.invalidateQueries({ queryKey: [sessionKey] });
       onClose();
     });
 

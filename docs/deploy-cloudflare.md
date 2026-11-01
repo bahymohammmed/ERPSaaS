@@ -39,6 +39,8 @@ browser ──► Worker "erp" (deploy/cloudflare/src/index.ts)
    | `MIGRATION_DATABASE_URL` | `postgres://erp_owner:…@host/erp?sslmode=require` |
    | `JWT_SECRET` | 64 random characters (`openssl rand -hex 32`) |
    | `MFA_ENCRYPTION_KEY` | 64 random characters. **Never change it**: enrolled 2FA secrets become unreadable. |
+   | `PLATFORM_ADMIN_EMAIL` | email of the first platform administrator (signs in to `/platform` to create tenants) |
+   | `PLATFORM_ADMIN_PASSWORD` | at least 10 characters; only used when that account is created |
    | `DEMO_PASSWORD` | optional; only used to load the demo tenant |
 
    The deploy job runs in the `production` GitHub environment, so you can add required reviewers there.
@@ -52,6 +54,8 @@ Every push to `main` runs `.github/workflows/deploy-cloudflare.yml`. The workflo
 3. Builds the image, pushes it to Cloudflare's registry, and deploys the Worker with its secrets.
 
 To deploy by hand, go to Actions → Deploy to Cloudflare → Run workflow. Tick *Load the demo tenant* to create `demo@example.com` with `DEMO_PASSWORD`.
+
+Self-service sign-up is off: customers get their organisation from the platform console. To allow sign-up, add a Worker variable `PUBLIC_SIGNUP` = `on` (Workers & Pages → erp → Settings → Variables).
 
 The app is served at `https://erp.<your-subdomain>.workers.dev`. To use your own domain, go to Workers & Pages → erp → Settings → Domains & Routes → Add custom domain.
 

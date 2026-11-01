@@ -1,7 +1,7 @@
 'use client';
 
-import { Anchor, Button, Checkbox, Group, NumberInput, Paper, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
-import { useQueryClient } from '@tanstack/react-query';
+import { Alert, Anchor, Button, Checkbox, Group, NumberInput, Paper, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -16,6 +16,7 @@ const SignupPage = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const publicConfig = useQuery({ queryKey: ['public-config'], queryFn: () => api<{ signup: boolean }>('/auth/config') });
   const [form, setForm] = useState({
     tenantName: '',
     companyCode: 'C01',
@@ -44,6 +45,18 @@ const SignupPage = () => {
       setBusy(false);
     }
   };
+
+  if (publicConfig.data?.signup === false) {
+    return (
+      <Paper withBorder shadow="sm" p="xl" radius="md">
+        <Stack>
+          <Title order={2}>{t('signUp')}</Title>
+          <Alert color="gray" variant="light">{t('signupClosed')}</Alert>
+          <Anchor component={Link} href="/login">{t('haveAccount')}</Anchor>
+        </Stack>
+      </Paper>
+    );
+  }
 
   return (
     <Paper withBorder shadow="sm" p="xl" radius="md">

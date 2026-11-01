@@ -41,6 +41,7 @@ type PgError = { code?: string; message?: string; constraint?: string; detail?: 
 const translatePgError = (error: unknown): unknown => {
   const pg = error as PgError;
   if (pg.code === 'P0001' && pg.message === 'POSTED_IMMUTABLE') return new AppError('POSTED_IMMUTABLE');
+  if (pg.code === '42501' && pg.message === 'FORBIDDEN') return new AppError('FORBIDDEN');
   if (pg.code === '23505') {
     const match = /\(([^)]*)\)=\(([^)]*)\)/.exec(pg.detail ?? '');
     const values = match?.[2]?.split(', ') ?? [];

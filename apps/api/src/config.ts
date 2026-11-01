@@ -18,5 +18,7 @@ export const config = {
   attachmentStorage: (process.env.ATTACHMENT_STORAGE === 'database' ? 'database' : 'disk') as 'disk' | 'database',
   chromiumPath: process.env.CHROMIUM_PATH || undefined,
   // COOKIE_SECURE=false lets the production image run over plain http on a local machine.
+  /** PUBLIC_SIGNUP=off: tenants are created only from the platform console. */
+  publicSignup: process.env.PUBLIC_SIGNUP !== 'off',
   secureCookies: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
 };

@@ -18,7 +18,7 @@ Multi-tenant SaaS ERP. This first module is the General Ledger. It is built for 
 docker compose --profile app up --build
 ```
 
-This builds the production image and starts PostgreSQL with it. It then applies the migrations and loads the demo tenant. Open http://localhost:8080 and sign in with `demo@example.com` / `demo-password-123`. `docker compose --profile app down -v` stops everything and deletes the data.
+This builds the production image and starts PostgreSQL with it. It then applies the migrations and loads the demo tenant. Open http://localhost:8080 and sign in with `demo@example.com` / `demo-password-123`. The platform console (to create tenants) is at the same address with `admin@example.com` / `admin-password-123`. `docker compose --profile app down -v` stops everything and deletes the data.
 
 ### Development
 
@@ -177,6 +177,17 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
 - **Rate limiting**: per-IP fixed window, 20/min on auth routes and 1200/min elsewhere (`RATE_LIMIT=off` disables it).
 - **Tenant export**: `GET admin/export` downloads all of a tenant's data as JSON, without password hashes or MFA secrets.
 
+### Platform administration (SaaS operator)
+- **Platform admins** are separate accounts listed in `core.platform_admins`. The application role cannot read or write that table; it is written by `pnpm platform:admin` (with `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD`) using the owner connection. A platform admin cannot belong to a tenant.
+- Signing in as a platform admin opens `/platform` with a platform-scoped token. Tenant routes reject it, and platform routes reject tenant tokens.
+- **Tenants**: list with plan, limits, usage and last sign-in; create a tenant with its first company and administrator (new user with a temporary password shown once, or an existing user); edit plan and limits; suspend (signs its users out and blocks sign-in) and reactivate.
+- **Support**: per-tenant companies and users; reset a member's password, optionally with 2FA.
+- Every platform action on a tenant is written to that tenant's audit log. Cross-tenant reads go through `SECURITY DEFINER` functions that re-check the caller.
+- `PUBLIC_SIGNUP=off` closes self-service sign-up, so tenants are created only from the console. Docker Compose and Cloudflare default to `off`.
+
+### User guide
+Every screen has a help button (?) in the header that opens the guide for that screen, in Arabic or English to match the interface. `/help` shows the whole guide, grouped and searchable, and does not require signing in. The content is in `apps/web/src/help/guides.ts`.
+
 ### Arabic / English
 - Master data has `name_ar` and `name_en`; if one is missing, the other is shown.
 - Search normalizes Arabic: alef forms, ta marbuta, alef maqsura, diacritics and tatweel.
@@ -226,6 +237,7 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 | Journals | `gl/journals` CRUD, `POST gl/journals/:id/{submit,approve,reject,post,reverse}`, attachments, `GET gl/journals/:id/audit`, `POST gl/postings` |
 | Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary,budget-vs-actual,statement}`, `GET gl/reports/voucher/:id`, with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
 | Group | `gl/intercompany/{partners,transactions}`, `GET gl/reports/{cash-flow,intercompany-reconciliation}`, `gl/cost-center-versions`, `consolidation/groups` (+ `/:id/adjustments`, `/:id/{worksheet,balance-sheet,income-statement}`) |
+| Platform | `GET platform/me`, `platform/tenants` (list, create), `GET/PATCH platform/tenants/:id`, `POST platform/tenants/:id/users/:userId/reset-credentials`, `POST platform/mfa/{setup,enable,disable}`; `GET auth/config` (public) |
 | Security | `POST auth/mfa/{setup,enable,disable}`, `POST admin/users/:id/mfa-reset`, `GET admin/export` |
 | Period-end | `gl/recurring` (+ `/:id/run`), `POST gl/fx-revaluation[/preview]`, `gl/allocation/{drivers,rules,runs}`, `POST gl/allocation/preview`, `gl/budgets` (+ `/lines`, `/generate`, `/status`), `gl/year-end/{rules,close,reopen}`, `GET gl/year-end/:fiscalYearId/preview`, `gl/statements`, `gl/import/{accounts,journals}`, `GET gl/import/templates/:kind` |
 

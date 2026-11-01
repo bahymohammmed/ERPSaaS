@@ -4,8 +4,8 @@ import type { Permission } from '@erp/shared';
 import type { Request } from 'express';
 import { DbService } from '../db/db.service';
 import { AppError } from './app-error';
-import { COMPANY_KEY, IS_PUBLIC, PERMISSIONS_KEY } from './decorators';
-import type { RequestContext } from './request-context';
+import { COMPANY_KEY, IS_PUBLIC, PERMISSIONS_KEY, PLATFORM_KEY } from './decorators';
+import type { PlatformContext, RequestContext } from './request-context';
 import { TokenService } from './token.service';
 
 export const AUTH_COOKIE = 'erp_token';
@@ -27,9 +27,18 @@ export class AuthGuard implements CanActivate {
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
 
-    const request = context.switchToHttp().getRequest<Request & { ctx?: RequestContext }>();
+    const request = context.switchToHttp().getRequest<Request & { ctx?: RequestContext; platformCtx?: PlatformContext }>();
     const token = extractToken(request);
     if (!token) throw new AppError('UNAUTHENTICATED');
+
+    if (this.reflector.getAllAndOverride<boolean>(PLATFORM_KEY, targets)) {
+      const userId = this.tokens.verifyPlatform(token);
+      const admin = await this.db.withoutTenant((tx) => tx.one<{ ok: boolean }>('SELECT core.is_platform_admin($1) AS ok', [userId]));
+      if (!admin.ok) throw new AppError('UNAUTHENTICATED');
+      request.platformCtx = { userId, ip: request.ip ?? '' };
+      return true;
+    }
+
     const claims = this.tokens.verify(token);
 
     const companyHeader = request.header('x-company-id');

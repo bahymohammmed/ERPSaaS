@@ -63,6 +63,44 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/** Platform console: a new tenant with its first company and administrator. */
+export const platformTenantSchema = z.object({
+  name: z.string().trim().min(2).max(200),
+  plan_code: z.string().trim().min(1).max(30).default('standard'),
+  max_companies: z.number().int().min(1).max(1000).default(3),
+  max_users: z.number().int().min(1).max(10000).default(25),
+  company: z.object({
+    code: codeSchema,
+    name_ar: z.string().trim().max(200).default(''),
+    name_en: z.string().trim().max(200).default(''),
+    base_currency: currencyCodeSchema.default('KWD'),
+    fiscal_year_start_month: z.number().int().min(1).max(12).default(1),
+    first_fiscal_year: z.number().int().min(2000).max(2100),
+    seed_chart_of_accounts: z.boolean().default(true),
+  }),
+  admin: z.object({
+    email: z.string().trim().toLowerCase().email(),
+    full_name: z.string().trim().min(2).max(200),
+    /** Omitted: a temporary password is generated and returned once. Ignored for existing users. */
+    password: z.string().min(10).max(200).optional(),
+    locale: z.enum(LOCALES).default('ar'),
+  }),
+});
+export type PlatformTenantInput = z.infer<typeof platformTenantSchema>;
+
+export const platformTenantUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  plan_code: z.string().trim().min(1).max(30).optional(),
+  max_companies: z.number().int().min(1).max(1000).optional(),
+  max_users: z.number().int().min(1).max(10000).optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const platformCredentialsResetSchema = z.object({
+  password: z.string().min(10).max(200).optional(),
+  reset_mfa: z.boolean().default(false),
+});
+
 export const switchTenantSchema = z.object({ tenantId: uuidSchema });
 
 export const userPreferencesSchema = z.object({

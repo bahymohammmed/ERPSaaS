@@ -31,6 +31,8 @@ import { ReportsController } from './gl/reports.controller';
 import { ReportsService } from './gl/reports.service';
 import { AdminController } from './platform/admin.controller';
 import { AdminService } from './platform/admin.service';
+import { PlatformController } from './platform/platform.controller';
+import { PlatformService } from './platform/platform.service';
 import { AuthController } from './platform/auth.controller';
 import { AuthService } from './platform/auth.service';
 import { ProvisioningService } from './platform/provisioning.service';
@@ -48,7 +50,7 @@ class HealthController {
 }
 
 @Module({
-  controllers: [HealthController, AuthController, AdminController, MasterDataController, JournalsController, ReportsController, Phase2Controller, Phase3CompanyController, ConsolidationController],
+  controllers: [HealthController, AuthController, AdminController, PlatformController, MasterDataController, JournalsController, ReportsController, Phase2Controller, Phase3CompanyController, ConsolidationController],
   providers: [
     DbService,
     TokenService,
@@ -56,6 +58,7 @@ class HealthController {
     ProvisioningService,
     AuthService,
     AdminService,
+    PlatformService,
     FiscalService,
     AccountsService,
     CostCentersService,

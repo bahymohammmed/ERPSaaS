@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from '@nestjs/
 import { loginSchema, type LoginInput, mfaCodeSchema, signupSchema, type SignupInput, switchTenantSchema, userPreferencesSchema } from '@erp/shared';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
+import { AppError } from '../common/app-error';
 import { AUTH_COOKIE } from '../common/auth.guard';
 import { Ctx, Public } from '../common/decorators';
 import type { RequestContext } from '../common/request-context';
@@ -16,6 +17,7 @@ export class AuthController {
   @Public()
   @Post('signup')
   async signup(@Body(new ZodPipe(signupSchema)) body: SignupInput, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    if (!config.publicSignup) throw new AppError('SIGNUP_DISABLED');
     return this.respond(res, await this.auth.signup(body, req.ip ?? ''));
   }
 
@@ -24,6 +26,13 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body(new ZodPipe(loginSchema)) body: LoginInput, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.respond(res, await this.auth.login(body, req.ip ?? ''));
+  }
+
+  /** What the sign-in page needs to know before anyone is signed in. */
+  @Public()
+  @Get('config')
+  publicConfig() {
+    return { signup: config.publicSignup };
   }
 
   @Public()

@@ -30,6 +30,11 @@ services:
       COOKIE_SECURE: "false"
       RUN_MIGRATIONS: "true"
       SEED_DEMO: "true"
+      # Platform (SaaS operator) console at /platform. Change these before exposing the app.
+      PLATFORM_ADMIN_EMAIL: admin@example.com
+      PLATFORM_ADMIN_PASSWORD: admin-password-123
+      # Tenants are created from the platform console; set to "on" to allow self-service sign-up.
+      PUBLIC_SIGNUP: "off"
       ATTACHMENT_STORAGE: database
     ports:
       - "8080:3000"

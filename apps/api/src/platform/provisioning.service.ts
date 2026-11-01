@@ -23,6 +23,17 @@ export type NewCompany = {
   require_approval?: boolean;
 };
 
+export type NewTenant = {
+  id: string;
+  name: string;
+  plan_code?: string;
+  max_companies?: number;
+  max_users?: number;
+  /** Becomes the tenant administrator; the user row must already exist. */
+  admin_user_id: string;
+  company: NewCompany;
+};
+
 const DEFAULT_COST_CENTERS = [
   { code: '1', ar: 'المركز الرئيسي', en: 'Head office', parent: null, posting: false, type: 'OTHER' },
   { code: '101', ar: 'الإدارة العامة', en: 'General administration', parent: '1', posting: true, type: 'ADMINISTRATIVE' },
@@ -34,6 +45,19 @@ const DEFAULT_COST_CENTERS = [
 @Injectable()
 export class ProvisioningService {
   constructor(private readonly fiscal: FiscalService) {}
+
+  /** Tenant row, system roles, the administrator's membership and the first company. Runs in the new tenant's context. */
+  async createTenant(tx: Tx, input: NewTenant): Promise<{ companyId: string }> {
+    await tx.query(
+      `INSERT INTO core.tenants (id, name, plan_code, max_companies, max_users)
+       VALUES ($1, $2, COALESCE($3, 'standard'), COALESCE($4, 3), COALESCE($5, 25))`,
+      [input.id, input.name, input.plan_code ?? null, input.max_companies ?? null, input.max_users ?? null],
+    );
+    const roles = await this.createSystemRoles(tx, input.id);
+    await tx.query('INSERT INTO core.tenant_users (tenant_id, user_id, role_id) VALUES ($1, $2, $3)', [input.id, input.admin_user_id, roles.ADMIN]);
+    const company = await this.createCompany(tx, input.id, input.company);
+    return { companyId: company.id };
+  }
 
   async createSystemRoles(tx: Tx, tenantId: string): Promise<Record<SystemRoleCode, string>> {
     const ids = {} as Record<SystemRoleCode, string>;

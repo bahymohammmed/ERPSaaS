@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "node -r @swc-node/register src/db/migrate.cli.ts",
     "seed:demo": "node -r @swc-node/register src/db/seed-demo.cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "platform:admin": "node -r @swc-node/register src/db/platform-admin.cli.ts"
   },
   "dependencies": {
     "@erp/shared": "workspace:*",
