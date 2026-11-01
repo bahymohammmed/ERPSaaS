@@ -1,4 +1,4 @@
-# Local PostgreSQL for development. Roles and databases are created by scripts/db-setup.sh.
+# Local PostgreSQL for development. Roles and databases are created by scripts/db-init.sql.
 #
 #   docker compose up -d                      database only (for pnpm dev:api / dev:web)
 #   docker compose --profile app up --build   database + the production image on http://localhost:8080
@@ -11,7 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./scripts/db-setup.sh:/docker-entrypoint-initdb.d/10-erp-setup.sh:ro
+      - ./scripts/db-init.sql:/docker-entrypoint-initdb.d/10-erp-init.sql:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 3s
