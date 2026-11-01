@@ -51,7 +51,8 @@ pnpm test
 
 ## Deployment
 
-Cloudflare (Workers + Containers, with a managed PostgreSQL): see [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md). The `Dockerfile` at the root builds one image containing the API, the web app and Chromium, and runs on any container host.
+- **Any server or PC with Docker**: `docker-compose.prod.yml` with automatic HTTPS (Caddy) or Cloudflare Tunnel. See [docs/deploy-docker.md](docs/deploy-docker.md).
+- Cloudflare (Workers + Containers, with a managed PostgreSQL): see [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md). The `Dockerfile` at the root builds one image containing the API, the web app and Chromium, and runs on any container host.
 
 ## Repository layout
 

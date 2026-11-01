@@ -9,7 +9,7 @@ import { AuthService } from '../platform/auth.service';
 import { DbService } from './db.service';
 
 const EMAIL = process.env.DEMO_EMAIL ?? 'demo@example.com';
-const PASSWORD = process.env.DEMO_PASSWORD ?? 'demo-password-123';
+const PASSWORD = process.env.DEMO_PASSWORD || 'demo-password-123';
 
 /** Creates a demo tenant with a year of realistic Kuwaiti postings. Safe to re-run: exits if the user exists. */
 const run = async (): Promise<void> => {
