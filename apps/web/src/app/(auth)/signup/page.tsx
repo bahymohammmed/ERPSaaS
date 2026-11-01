@@ -48,7 +48,7 @@ const SignupPage = () => {
 
   if (publicConfig.data?.signup === false) {
     return (
-      <Paper withBorder shadow="sm" p="xl" radius="md">
+      <Paper withBorder shadow="md" p={{ base: 'lg', sm: 32 }} radius="lg">
         <Stack>
           <Title order={2}>{t('signUp')}</Title>
           <Alert color="gray" variant="light">{t('signupClosed')}</Alert>
@@ -59,7 +59,7 @@ const SignupPage = () => {
   }
 
   return (
-    <Paper withBorder shadow="sm" p="xl" radius="md">
+    <Paper withBorder shadow="md" p={{ base: 'lg', sm: 32 }} radius="lg">
       <form onSubmit={submit}>
         <Stack gap="sm">
           <Title order={2}>{t('signUp')}</Title>

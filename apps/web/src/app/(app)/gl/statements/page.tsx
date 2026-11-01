@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useCompanyQuery } from '@/lib/queries';
@@ -127,7 +128,7 @@ const StatementsPage = () => {
             ))}
           </Table.Tbody>
         </Table>
-        {data.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {data.length === 0 && <EmptyState />}
       </Paper>
 
       <Modal opened={!!form} onClose={() => setForm(null)} title={form?.id ? t('edit') : t('add')} size="100%">

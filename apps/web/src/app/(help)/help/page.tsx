@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { GuideView } from '@/components/GuideView';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { GUIDES, type GuideSection, SECTION_TITLES } from '@/help/guides';
 import { useI18n } from '@/i18n/i18n';
 
@@ -33,6 +34,7 @@ const HelpPage = () => {
           <Anchor component={Link} href="/" size="sm">
             {t('backToApp')}
           </Anchor>
+          <ThemeToggle />
           <LanguageToggle />
         </Group>
       </Group>

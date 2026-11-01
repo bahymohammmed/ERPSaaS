@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { AccountSelect, Amount, CostCenterSelect, PageHeader, StatusBadge } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useAccounts, useCompanyQuery, useCostCenters, usePeriods } from '@/lib/queries';
@@ -193,7 +194,7 @@ const AllocationPage = () => {
                 ))}
               </Table.Tbody>
             </Table>
-            {rules.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+            {rules.length === 0 && <EmptyState />}
           </Paper>
         </Tabs.Panel>
 
@@ -335,7 +336,7 @@ const AllocationPage = () => {
                   ))}
                 </Table.Tbody>
               </Table>
-              {runs.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+              {runs.length === 0 && <EmptyState />}
             </Paper>
           </Stack>
         </Tabs.Panel>

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/common';
 import { EMPTY_NAMED, NamedFormModal, type NamedValues } from '@/components/NamedForm';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useDimensions } from '@/lib/queries';
@@ -53,7 +54,7 @@ const DimensionsPage = () => {
           )
         }
       />
-      {data.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+      {data.length === 0 && <EmptyState />}
       <SimpleGrid cols={{ base: 1, md: 2 }}>
         {data.map((d) => (
           <Card key={d.id} withBorder>

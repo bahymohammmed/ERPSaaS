@@ -1,12 +1,13 @@
 'use client';
 
-import { Alert, Button, Checkbox, Group, NumberInput, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Button, Checkbox, Divider, Group, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Skeleton, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { pickText, type ReportColumn, type ReportDocument, type ReportLanguage, type ReportRow } from '@erp/shared';
 import { IconFileSpreadsheet, IconFileTypePdf, IconPlayerPlay } from '@tabler/icons-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { AccountSelect, CostCenterSelect, PageHeader } from '@/components/common';
 import { notifyError } from '@/components/notify';
+import { TableSkeletonRows } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import type { MessageKey } from '@/i18n/messages';
 import { api, download } from '@/lib/api';
@@ -162,7 +163,7 @@ const ReportScreen = () => {
   };
 
   if (!report) return <Alert color="red">{t('noData')}</Alert>;
-  if (!params) return <Text>{t('loading')}</Text>;
+  if (!params) return <Skeleton height={180} radius="lg" />;
 
   const selectedStatement = statements.find((st) => st.id === params.statement_id);
   /** Designed statements show a period range or an as-at period depending on their basis. */
@@ -249,39 +250,49 @@ const ReportScreen = () => {
             />
           )}
           {show('includeZero') && (
-            <Checkbox mt="xl" label={t('includeZero')} checked={params.include_zero === 'true'} onChange={(e) => set('include_zero', e.currentTarget.checked ? 'true' : 'false')} />
+            <Checkbox mt={{ base: 0, md: 30 }} label={t('includeZero')} checked={params.include_zero === 'true'} onChange={(e) => set('include_zero', e.currentTarget.checked ? 'true' : 'false')} />
           )}
         </SimpleGrid>
-        <Group mt="md" justify="space-between">
+        <Divider my="md" />
+        <Group justify="space-between" wrap="wrap" gap="sm">
           <Button leftSection={<IconPlayerPlay size={16} />} onClick={() => runReport()} disabled={!ready} loading={loading}>
             {t('run')}
           </Button>
           <Group gap="xs">
-            <Select
+            <SegmentedControl
               size="xs"
-              w={170}
               aria-label={t('reportLanguage')}
               data={[
-                { value: 'ar', label: t('arabic') },
-                { value: 'en', label: t('english') },
-                { value: 'both', label: t('bothLanguages') },
+                { value: 'ar', label: 'ع' },
+                { value: 'en', label: 'EN' },
+                { value: 'both', label: 'ع + EN' },
               ]}
               value={exportLang}
               onChange={(v) => setExportLang((v ?? 'ar') as ReportLanguage)}
-              allowDeselect={false}
             />
-            <Button size="xs" variant="light" leftSection={<IconFileTypePdf size={16} />} disabled={!ready} onClick={() => exportAs('pdf')}>
+            <Button size="xs" variant="default" leftSection={<IconFileTypePdf size={16} color="var(--mantine-color-red-6)" />} disabled={!ready} onClick={() => exportAs('pdf')}>
               {t('exportPdf')}
             </Button>
-            <Button size="xs" variant="light" color="teal" leftSection={<IconFileSpreadsheet size={16} />} disabled={!ready} onClick={() => exportAs('xlsx')}>
+            <Button size="xs" variant="default" leftSection={<IconFileSpreadsheet size={16} color="var(--mantine-color-green-7)" />} disabled={!ready} onClick={() => exportAs('xlsx')}>
               {t('exportExcel')}
             </Button>
           </Group>
         </Group>
       </Paper>
 
-      {doc && (
+      {loading && !doc && (
         <Paper withBorder p="md">
+          <Skeleton height={20} width="30%" mb="xs" />
+          <Skeleton height={12} width="20%" mb="lg" />
+          <Table>
+            <Table.Tbody>
+              <TableSkeletonRows cols={6} rows={8} />
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+      {doc && (
+        <Paper withBorder p="md" key={doc.generatedAt} className="page-enter" style={{ opacity: loading ? 0.55 : 1, transition: 'opacity 200ms var(--ease-out)' }}>
           <Title order={4}>{pickText(doc.title, locale)}</Title>
           {doc.subtitle.map((s, i) => (
             <Text key={i} size="sm" c="dimmed">

@@ -122,6 +122,9 @@ importers:
       '@mantine/notifications':
         specifier: 7.17.8
         version: 7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.1.10))(@types/react@19.1.12)(react-dom@19.1.10(react@19.1.10))(react@19.1.10))(@mantine/hooks@7.17.8(react@19.1.10))(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      '@mantine/spotlight':
+        specifier: 7.17.8
+        version: 7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.1.10))(@types/react@19.1.12)(react-dom@19.1.10(react@19.1.10))(react@19.1.10))(@mantine/hooks@7.17.8(react@19.1.10))(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
       '@tabler/icons-react':
         specifier: 3.34.1
         version: 3.34.1(react@19.1.10)
@@ -759,6 +762,14 @@ packages:
 
   '@mantine/notifications@7.17.8':
     resolution: {integrity: sha512-/YK16IZ198W6ru/IVecCtHcVveL08u2c8TbQTu/2p26LSIM9AbJhUkrU6H+AO0dgVVvmdmNdvPxcJnfq3S9TMg==}
+    peerDependencies:
+      '@mantine/core': 7.17.8
+      '@mantine/hooks': 7.17.8
+      react: ^18.x || ^19.x
+      react-dom: ^18.x || ^19.x
+
+  '@mantine/spotlight@7.17.8':
+    resolution: {integrity: sha512-hBjajnPetyf95bEa4eHmqsqylCdsBBgYa2hiSuM+fMNwxx2mVR97Tvn7BiMZa+K0A/s5u5KM7+Yi6SnhUjZNQg==}
     peerDependencies:
       '@mantine/core': 7.17.8
       '@mantine/hooks': 7.17.8
@@ -4690,6 +4701,14 @@ snapshots:
       react: 19.1.10
       react-dom: 19.1.10(react@19.1.10)
       react-transition-group: 4.4.5(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+
+  '@mantine/spotlight@7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.1.10))(@types/react@19.1.12)(react-dom@19.1.10(react@19.1.10))(react@19.1.10))(@mantine/hooks@7.17.8(react@19.1.10))(react-dom@19.1.10(react@19.1.10))(react@19.1.10)':
+    dependencies:
+      '@mantine/core': 7.17.8(@mantine/hooks@7.17.8(react@19.1.10))(@types/react@19.1.12)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      '@mantine/hooks': 7.17.8(react@19.1.10)
+      '@mantine/store': 7.17.8(react@19.1.10)
+      react: 19.1.10
+      react-dom: 19.1.10(react@19.1.10)
 
   '@mantine/store@7.17.8(react@19.1.10)':
     dependencies:

@@ -11,9 +11,11 @@ import { toTreeRows } from '@/lib/tree';
 export const PageHeader = ({ title, actions, subtitle }: { title: string; actions?: ReactNode; subtitle?: ReactNode }) => (
   <Group justify="space-between" mb="md" align="flex-end" wrap="wrap">
     <div>
-      <Title order={3}>{title}</Title>
+      <Title order={2} fz={{ base: 22, sm: 26 }} fw={700} style={{ letterSpacing: '-0.02em' }}>
+        {title}
+      </Title>
       {subtitle && (
-        <Text c="dimmed" size="sm">
+        <Text c="dimmed" size="sm" mt={2}>
           {subtitle}
         </Text>
       )}

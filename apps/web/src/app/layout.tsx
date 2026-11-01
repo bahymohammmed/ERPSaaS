@@ -1,5 +1,6 @@
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import '@mantine/spotlight/styles.css';
 import '@fontsource/ibm-plex-sans-arabic/400.css';
 import '@fontsource/ibm-plex-sans-arabic/600.css';
 import './globals.css';
@@ -16,7 +17,7 @@ const RootLayout = async ({ children }: { children: ReactNode }) => {
   return (
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} {...mantineHtmlProps}>
       <head>
-        <ColorSchemeScript defaultColorScheme="light" />
+        <ColorSchemeScript defaultColorScheme="auto" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body>

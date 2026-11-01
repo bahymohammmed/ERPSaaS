@@ -15,7 +15,7 @@ export const Providers = ({ locale, children }: { locale: Locale; children: Reac
   return (
     <QueryClientProvider client={queryClient}>
       <I18nProvider initialLocale={locale}>
-        <MantineProvider theme={theme} defaultColorScheme="light">
+        <MantineProvider theme={theme} defaultColorScheme="auto">
           <Notifications position="top-center" />
           {children}
         </MantineProvider>

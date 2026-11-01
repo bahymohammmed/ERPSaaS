@@ -1,14 +1,16 @@
 'use client';
 
-import { AppShell, Center, Group, Loader, Menu, Text, UnstyledButton } from '@mantine/core';
+import { AppShell, Badge, Center, Group, Loader, Menu, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconChevronDown, IconShieldCheck } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
+import { Brand } from '@/components/Brand';
 import { HelpButton } from '@/components/HelpButton';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { MfaModal } from '@/components/MfaModal';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { useI18n } from '@/i18n/i18n';
 import { api, ApiError } from '@/lib/api';
 
@@ -41,14 +43,18 @@ const PlatformLayout = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AppShell header={{ height: 56 }} padding="md">
-      <AppShell.Header>
+    <AppShell header={{ height: 60 }} padding={{ base: 'md', md: 'lg' }}>
+      <AppShell.Header className="glass">
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Text fw={700}>
-            {t('appName')} — {t('platformConsole')}
-          </Text>
+          <Group gap="sm" wrap="nowrap">
+            <Brand name={t('appName')} />
+            <Badge variant="light" visibleFrom="sm">
+              {t('platformConsole')}
+            </Badge>
+          </Group>
           <Group gap="xs" wrap="nowrap">
             <HelpButton />
+            <ThemeToggle />
             <LanguageToggle />
             <Menu position="bottom-end" withinPortal>
               <Menu.Target>
@@ -76,7 +82,9 @@ const PlatformLayout = ({ children }: { children: ReactNode }) => {
         </Group>
       </AppShell.Header>
       <MfaModal opened={mfaOpened} enabled={me.data.user.mfa_enabled} onClose={closeMfa} basePath="/platform/mfa" sessionKey="platform-me" />
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main>
+        <div className="page-enter">{children}</div>
+      </AppShell.Main>
     </AppShell>
   );
 };

@@ -185,6 +185,14 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
 - Every platform action on a tenant is written to that tenant's audit log. Cross-tenant reads go through `SECURITY DEFINER` functions that re-check the caller.
 - `PUBLIC_SIGNUP=off` closes self-service sign-up, so tenants are created only from the console. Docker Compose and Cloudflare default to `off`.
 
+### Interface and design
+- **Light, dark and system themes.** Switch from the sun/moon button in the header, or from Appearance in the user menu. Colours come from one set of tokens (`apps/web/src/app/theme.ts`, `globals.css`).
+- **Navigation**: the sidebar is grouped into overview, general ledger, period-end, group companies, reports and administration. It collapses to an icon rail, with labels as tooltips, and remembers your choice.
+- **Search (Ctrl K or /)**: jump to any screen or report you have access to, or run an action: new entry, switch theme or language, open the guide, sign out.
+- **Dashboard**: cash and bank, revenue, expenses and net profit for the year to date (amounts count up as they load), a monthly revenue/expense chart, a work queue and the latest entries. It reads from `GET /gl/dashboard`. Users limited to some cost centers do not see company-wide totals.
+- **Motion**: pages fade in, cards appear one after another, chart bars grow, hover lifts and press feedback. Every animation is switched off when the operating system asks for reduced motion.
+- **States**: skeleton rows while loading, empty states with a next step, and a sticky totals bar in the journal editor that shows the balance as you type.
+
 ### User guide
 Every screen has a help button (?) in the header that opens the guide for that screen, in Arabic or English to match the interface. `/help` shows the whole guide, grouped and searchable, and does not require signing in. The content is in `apps/web/src/help/guides.ts`.
 

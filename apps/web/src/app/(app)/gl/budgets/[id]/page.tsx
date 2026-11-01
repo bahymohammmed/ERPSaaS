@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, Button, Checkbox, Group, Modal, NumberInput, Paper, Select, Stack, Table, Text, TextInput } from '@mantine/core';
+import { Badge, Button, Checkbox, Group, Modal, NumberInput, Paper, Select, Stack, Table, Text, TextInput, Skeleton } from '@mantine/core';
 import { Money, sumAmounts } from '@erp/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -94,7 +94,7 @@ const BudgetEditorPage = () => {
   const rowTotal = (accountId: string) => sumAmounts(yearPeriods.map((p) => (isAmount(value(accountId, p.id)) ? value(accountId, p.id) : '0')));
   const columnTotal = (periodId: string) => plAccounts.reduce((acc, a) => acc.plus(isAmount(value(a.id, periodId)) ? value(a.id, periodId) : '0'), new Money(0));
 
-  if (!budget) return <Text>{t('loading')}</Text>;
+  if (!budget) return <Skeleton height={320} radius="lg" />;
 
   return (
     <Stack>

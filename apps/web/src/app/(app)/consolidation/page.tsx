@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -94,7 +95,7 @@ const ConsolidationPage = () => {
           </Table.Thead>
           <Table.Tbody>
             {groups.map((g) => (
-              <Table.Tr key={g.id} className="clickable" onClick={() => setSelected(g.id ?? null)} bg={selected === g.id ? 'var(--mantine-color-indigo-0)' : undefined}>
+              <Table.Tr key={g.id} className={selected === g.id ? 'clickable selected' : 'clickable'} onClick={() => setSelected(g.id ?? null)}>
                 <Table.Td className="ltr">{g.code}</Table.Td>
                 <Table.Td>{name(g)}</Table.Td>
                 <Table.Td>{g.parent_company_id ? companyLabel(g.parent_company_id) : ''}</Table.Td>
@@ -127,7 +128,7 @@ const ConsolidationPage = () => {
             ))}
           </Table.Tbody>
         </Table>
-        {groups.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {groups.length === 0 && <EmptyState />}
       </Paper>
 
       {selected && (
@@ -170,7 +171,7 @@ const ConsolidationPage = () => {
               ))}
             </Table.Tbody>
           </Table>
-          {(adjustments.data ?? []).length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+          {(adjustments.data ?? []).length === 0 && <EmptyState />}
         </Paper>
       )}
 

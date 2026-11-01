@@ -13,13 +13,17 @@ import {
   type ReportLanguage,
 } from '@erp/shared';
 import type { Response } from 'express';
+import { z } from 'zod';
 import { CompanyCtx, CompanyScoped, Ctx, RequirePermissions } from '../common/decorators';
 import type { CompanyContext, RequestContext } from '../common/request-context';
 import { parse } from '../common/zod.pipe';
 import { ConsolidationService } from './consolidation.service';
 import { CostCentersService } from './cost-centers.service';
+import { DashboardService } from './dashboard.service';
 import { ExportService } from './export/export.service';
 import { IntercompanyService } from './intercompany.service';
+
+const dashboardQuerySchema = z.object({ today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
 
 type Format = { format: 'json' | 'pdf' | 'xlsx'; lang: ReportLanguage; digits: DigitStyle };
 
@@ -42,7 +46,15 @@ export class Phase3CompanyController {
     private readonly intercompany: IntercompanyService,
     private readonly costCenters: CostCentersService,
     private readonly exporter: ExportService,
+    private readonly dashboard: DashboardService,
   ) {}
+
+  /** Headline financial figures; `today` comes from the browser so the user's date is used. */
+  @Get('dashboard')
+  @RequirePermissions('gl.report.view')
+  dashboardFinancials(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown) {
+    return this.dashboard.financials(ctx, parse(dashboardQuerySchema, query).today);
+  }
 
   @Get('intercompany/partners')
   @RequirePermissions('gl.master.view')

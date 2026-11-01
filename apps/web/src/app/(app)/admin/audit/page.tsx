@@ -4,6 +4,7 @@ import { Code, Paper, Select, Table, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
 import { PageHeader } from '@/components/common';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { auditActionLabel } from '@/i18n/messages';
 import { api } from '@/lib/api';
@@ -60,7 +61,7 @@ const AuditPage = () => {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
-        {data.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {data.length === 0 && <EmptyState />}
       </Paper>
     </>
   );

@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CostCenterSelect, PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useCostCenters, useTemplates } from '@/lib/queries';
@@ -61,7 +62,7 @@ const TemplatesPage = () => {
           )
         }
       />
-      {data.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+      {data.length === 0 && <EmptyState />}
       <SimpleGrid cols={{ base: 1, md: 2 }}>
         {data.map((tpl) => (
           <Card key={tpl.id} withBorder>

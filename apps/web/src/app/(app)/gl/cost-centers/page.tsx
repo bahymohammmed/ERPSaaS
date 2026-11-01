@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { CostCenterSelect, PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState, TableSkeletonRows } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useCostCenters } from '@/lib/queries';
@@ -147,9 +148,7 @@ const CostCentersPage = () => {
             </Table.Thead>
             <Table.Tbody>
               {isLoading && (
-                <Table.Tr>
-                  <Table.Td colSpan={8}>{t('loading')}</Table.Td>
-                </Table.Tr>
+                <TableSkeletonRows cols={8} />
               )}
               {rows.map((c) => (
                 <Table.Tr key={c.id} className={c.is_posting ? undefined : 'row-header'}>
@@ -218,7 +217,7 @@ const CostCentersPage = () => {
             ))}
           </Table.Tbody>
         </Table>
-        {(versions.data ?? []).length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {(versions.data ?? []).length === 0 && <EmptyState />}
       </Paper>
 
       <Modal opened={!!version} onClose={() => setVersion(null)} title={t('snapshotHierarchy')}>

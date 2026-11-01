@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { Amount, PageHeader, StatusBadge } from '@/components/common';
+import { EmptyState, TableSkeletonRows } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useJournalTypes } from '@/lib/queries';
@@ -91,9 +92,7 @@ const JournalList = () => {
             </Table.Thead>
             <Table.Tbody>
               {isLoading && (
-                <Table.Tr>
-                  <Table.Td colSpan={8}>{t('loading')}</Table.Td>
-                </Table.Tr>
+                <TableSkeletonRows cols={8} />
               )}
               {data?.rows.map((row) => (
                 <Table.Tr key={row.id} className="clickable" onClick={() => router.push(`/gl/journals/${row.id}`)}>
@@ -116,7 +115,7 @@ const JournalList = () => {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
-        {data && data.rows.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {data && data.rows.length === 0 && <EmptyState />}
         {data && data.total > pageSize && <Pagination mt="sm" total={Math.ceil(data.total / pageSize)} value={page} onChange={setPage} />}
       </Paper>
     </>

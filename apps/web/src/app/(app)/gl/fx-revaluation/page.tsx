@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Amount, PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -121,7 +122,7 @@ const FxRevaluationPage = () => {
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>
-          {preview.lines.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+          {preview.lines.length === 0 && <EmptyState />}
         </Paper>
       )}
     </Stack>

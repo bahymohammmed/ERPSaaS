@@ -33,6 +33,7 @@ import { AdminController } from './platform/admin.controller';
 import { AdminService } from './platform/admin.service';
 import { PlatformController } from './platform/platform.controller';
 import { PlatformService } from './platform/platform.service';
+import { DashboardService } from './gl/dashboard.service';
 import { AuthController } from './platform/auth.controller';
 import { AuthService } from './platform/auth.service';
 import { ProvisioningService } from './platform/provisioning.service';
@@ -59,6 +60,7 @@ class HealthController {
     AuthService,
     AdminService,
     PlatformService,
+    DashboardService,
     FiscalService,
     AccountsService,
     CostCentersService,

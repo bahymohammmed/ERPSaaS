@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useCompanyQuery, useCurrencies } from '@/lib/queries';
@@ -96,7 +97,7 @@ const CurrenciesPage = () => {
             ))}
           </Table.Tbody>
         </Table>
-        {rates.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {rates.length === 0 && <EmptyState />}
       </Paper>
     </Stack>
   );

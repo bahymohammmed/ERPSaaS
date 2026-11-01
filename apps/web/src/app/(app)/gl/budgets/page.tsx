@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { PageHeader } from '@/components/common';
 import { notifyError } from '@/components/notify';
+import { EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useCompanyQuery, useFiscalYears } from '@/lib/queries';
@@ -88,7 +89,7 @@ const BudgetsPage = () => {
             ))}
           </Table.Tbody>
         </Table>
-        {data.length === 0 && <Text c="dimmed">{t('noData')}</Text>}
+        {data.length === 0 && <EmptyState />}
       </Paper>
       <Modal opened={!!form} onClose={() => setForm(null)} title={t('add')}>
         {form && (

@@ -290,3 +290,18 @@ describe('attachment storage', () => {
     }
   });
 });
+
+describe('dashboard', () => {
+  it('summarises revenue, expenses, profit and cash for the fiscal year', async () => {
+    const fx = await signupTenant(app);
+    const a = fx.accounts;
+    await postEntry(fx, { entry_date: '2026-02-03', lines: [line(a['110103']!, '5000.000', '0'), line(a['4101']!, '0', '5000.000')] });
+    await postEntry(fx, { entry_date: '2026-03-04', lines: [line(a['5201']!, '1250.500', '0', { cost_center_id: fx.costCenters['101'] }), line(a['110103']!, '0', '1250.500')] });
+    const res = await fx.api.get('/gl/dashboard?today=2026-03-31');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ available: true, fiscal_year: '2026', revenue_ytd: '5000.0000', expense_ytd: '1250.5000', net_profit_ytd: '3749.5000', cash_balance: '3749.5000' });
+    expect(res.body.months).toHaveLength(12);
+    expect(res.body.months[1].revenue).toBe('5000.0000');
+    expect(res.body.months[2].expense).toBe('1250.5000');
+  });
+});

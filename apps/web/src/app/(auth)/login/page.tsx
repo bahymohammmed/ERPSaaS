@@ -39,10 +39,17 @@ const LoginPage = () => {
   };
 
   return (
-    <Paper withBorder shadow="sm" p="xl" radius="md">
+    <Paper withBorder shadow="md" p={{ base: 'lg', sm: 36 }} radius="lg">
       <form onSubmit={submit}>
         <Stack>
-          <Title order={2}>{t('appName')}</Title>
+          <div>
+            <Title order={2} style={{ letterSpacing: '-0.02em' }}>
+              {t('welcomeBack')}
+            </Title>
+            <Text c="dimmed" size="sm" mt={4}>
+              {t('signInSubtitle')}
+            </Text>
+          </div>
           <TextInput label={t('email')} type="email" required value={email} onChange={(e) => setEmail(e.currentTarget.value)} classNames={{ input: 'ltr' }} autoComplete="username" />
           <PasswordInput label={t('password')} required value={password} onChange={(e) => setPassword(e.currentTarget.value)} autoComplete="current-password" />
           {needsOtp && (
@@ -57,7 +64,9 @@ const LoginPage = () => {
               classNames={{ input: 'ltr' }}
             />
           )}
-          <Button type="submit" loading={busy} disabled={needsOtp && otp.length !== 6}>{t('signIn')}</Button>
+          <Button type="submit" size="md" loading={busy} disabled={needsOtp && otp.length !== 6}>
+            {t('signIn')}
+          </Button>
           {publicConfig.data?.signup && (
             <Text size="sm">
               <Anchor component={Link} href="/signup">{t('noAccount')}</Anchor>

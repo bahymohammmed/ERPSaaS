@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { AccountSelect, CostCenterSelect, PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { TableSkeletonRows } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useAccounts, useCostCenters, useCurrencies, useDimensions } from '@/lib/queries';
@@ -162,9 +163,7 @@ const AccountsPage = () => {
             </Table.Thead>
             <Table.Tbody>
               {isLoading && (
-                <Table.Tr>
-                  <Table.Td colSpan={7}>{t('loading')}</Table.Td>
-                </Table.Tr>
+                <TableSkeletonRows cols={7} />
               )}
               {rows.map((a) => (
                 <Table.Tr key={a.id} className={a.is_posting ? undefined : 'row-header'}>

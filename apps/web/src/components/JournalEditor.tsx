@@ -394,7 +394,7 @@ export const JournalEditor = ({ id }: { id?: string }) => {
               </Button>
             )}
             {can('gl.journal.post') && (status === 'APPROVED' || (!requireApproval && (status === 'SUBMITTED' || editable))) && (
-              <Button color="indigo" onClick={() => transition('post', t('confirmPost'))} loading={busy}>
+              <Button onClick={() => transition('post', t('confirmPost'))} loading={busy}>
                 {t('post')}
               </Button>
             )}
@@ -664,7 +664,7 @@ export const JournalEditor = ({ id }: { id?: string }) => {
           </Table.ScrollContainer>
         )}
 
-        <Group justify="space-between" mt="sm">
+        <Group justify="space-between" mt="sm" className="totals-bar">
           {editable ? (
             <Button variant="light" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setLines((ls) => [...ls, blankLine(base)])}>
               {t('addLine')}
@@ -680,7 +680,7 @@ export const JournalEditor = ({ id }: { id?: string }) => {
               {t('credit')}: <Amount value={editable ? totals.credit.toString() : entry?.total_credit} minor={minor} />
             </Text>
             {editable && totals.exact && (
-              <Badge color={totals.diff.isZero() ? 'teal' : 'red'} variant="light">
+              <Badge key={totals.diff.isZero() ? 'ok' : 'diff'} className="pop-in" color={totals.diff.isZero() ? 'teal' : 'red'} variant="light">
                 {totals.diff.isZero() ? t('balanced') : `${t('difference')}: ${amount(totals.diff.toString(), minor)}`}
               </Badge>
             )}

@@ -29,6 +29,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
+import { EmptyRow, TableSkeletonRows } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 
@@ -169,14 +170,10 @@ const PlatformPage = () => {
             </Table.Thead>
             <Table.Tbody>
               {tenants.isLoading && (
-                <Table.Tr>
-                  <Table.Td colSpan={8}>{t('loading')}</Table.Td>
-                </Table.Tr>
+                <TableSkeletonRows cols={8} />
               )}
               {tenants.data?.length === 0 && (
-                <Table.Tr>
-                  <Table.Td colSpan={8}>{t('noData')}</Table.Td>
-                </Table.Tr>
+                <EmptyRow cols={8} />
               )}
               {(tenants.data ?? []).map((tenant) => (
                 <Table.Tr key={tenant.id}>
