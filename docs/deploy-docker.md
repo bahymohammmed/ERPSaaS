@@ -49,10 +49,10 @@ Fill in every value. Generate each secret with `openssl rand -hex 32` (or, in Po
 
 ```powershell
 docker compose -f docker-compose.prod.yml up -d --build
-docker run --rm --network erpsaas_default cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://app:3000
+docker run --rm --network erp-prod_default cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://app:3000
 ```
 
-The address is printed in the output. `erpsaas_default` is the folder name plus `_default`; run `docker network ls` if yours differs. Set `CLIENT_IP_HEADER=cf-connecting-ip` in `.env`.
+The address is printed in the output. Set `CLIENT_IP_HEADER=cf-connecting-ip` in `.env`.
 
 **Fixed address on your domain**: the domain must use Cloudflare DNS.
 

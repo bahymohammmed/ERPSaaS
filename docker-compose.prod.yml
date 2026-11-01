@@ -5,6 +5,10 @@
 #      docker compose -f docker-compose.prod.yml --profile caddy  up -d --build   (server with a public IP and a domain)
 #      docker compose -f docker-compose.prod.yml --profile tunnel up -d --build   (any machine, through Cloudflare Tunnel)
 # See docs/deploy-docker.md.
+
+# Separate project from the development docker-compose.yml, so their databases never mix.
+name: erp-prod
+
 services:
   postgres:
     image: postgres:16
