@@ -6,6 +6,7 @@ import type { CompanyContext } from '../common/request-context';
 import { JournalsService } from '../gl/journals.service';
 import { MastersService } from '../gl/masters.service';
 import { AuthService } from '../platform/auth.service';
+import { FixedAssetsService } from '../fa/fixed-assets.service';
 import { DbService } from './db.service';
 
 const EMAIL = process.env.DEMO_EMAIL ?? 'demo@example.com';
@@ -100,6 +101,18 @@ const run = async (): Promise<void> => {
       { a: '3201', c: '15065.000' },
     ], 'OPN');
 
+    // The vehicles and furniture in the opening balances become registered fixed assets.
+    const assets = app.get(FixedAssetsService);
+    const category = await lookup('fa.categories');
+    const period = await lookup('gl.fiscal_periods');
+    for (const a of [
+      { code: 'VEH-001', name_ar: 'شاحنة توصيل تويوتا هايس', name_en: 'Toyota Hiace delivery van', category_id: category.VEH!, cost_center_id: cc['102']!, cost: '18000.000', location: 'الشويخ', custodian: 'مشرف المبيعات', serial_no: 'JTFSS22P0K0123456' },
+      { code: 'FUR-001', name_ar: 'أثاث المكتب الرئيسي', name_en: 'Head office furniture', category_id: category.FUR!, cost_center_id: cc['101']!, cost: '7500.000', location: 'المكتب الرئيسي', custodian: null, serial_no: null },
+    ]) {
+      const asset = await assets.createAsset(ctx, { ...a, acquisition_date: '2026-01-01', in_service_date: '2026-01-01' });
+      await assets.activate(ctx, asset.id, { mode: 'EXISTING', opening_accum_dep: '0', opening_dep_date: null });
+    }
+
     const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
     for (const [i, m] of months.entries()) {
       const sales = (24000 + i * 1350.5).toFixed(3);
@@ -132,11 +145,7 @@ const run = async (): Promise<void> => {
         { a: '5310', d: '18.500' },
         { a: '110103', c: (380 + i * 12.125 + 145.75 + 18.5).toFixed(3) },
       ]);
-      await post(`2026-${m}-28`, `استهلاك شهر ${m} / Depreciation ${m}`, [
-        { a: '5501', d: '425.000', cc: '101' },
-        { a: '120203', c: '300.000' },
-        { a: '120204', c: '125.000' },
-      ]);
+      await assets.postRun(ctx, period[`2026-${m}`]!);
     }
     await post('2026-03-12', 'اشتراك برمجيات بالدولار / Software subscription (USD)', [
       { a: '5305', d: '1200.00', cur: 'USD', cc: '101' },

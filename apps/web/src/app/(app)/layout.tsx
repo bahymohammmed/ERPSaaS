@@ -30,6 +30,9 @@ import {
   IconBook2,
   IconBuilding,
   IconBuildingSkyscraper,
+  IconBuildingWarehouse,
+  IconCategory,
+  IconTrendingDown,
   IconCalendarRepeat,
   IconCalendarStats,
   IconChartBar,
@@ -106,6 +109,14 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: 'navFixedAssets',
+    items: [
+      { href: '/fa/assets', label: 'navAssetRegister', icon: IconBuildingWarehouse, permission: 'fa.view' },
+      { href: '/fa/depreciation', label: 'navDepreciation', icon: IconTrendingDown, permission: 'fa.manage' },
+      { href: '/fa/categories', label: 'navAssetCategories', icon: IconCategory, permission: 'fa.view' },
+    ],
+  },
+  {
     label: 'navGroupCompanies',
     items: [
       { href: '/gl/intercompany', label: 'navIntercompany', icon: IconArrowsExchange, permission: 'gl.master.view' },
@@ -125,6 +136,9 @@ const REPORT_ITEMS: { key: string; label: MessageKey }[] = [
   { key: 'cost-center-summary', label: 'reportCostCenterSummary' },
   { key: 'budget-vs-actual', label: 'reportBudgetVsActual' },
   { key: 'statement', label: 'reportStatement' },
+  { key: 'fa-register', label: 'reportFaRegister' },
+  { key: 'fa-movement', label: 'reportFaMovement' },
+  { key: 'fa-forecast', label: 'reportFaForecast' },
   { key: 'intercompany-reconciliation', label: 'reportIcReconciliation' },
   { key: 'consolidation-worksheet', label: 'reportConsolidationWorksheet' },
   { key: 'consolidated-balance-sheet', label: 'reportConsolidatedBs' },

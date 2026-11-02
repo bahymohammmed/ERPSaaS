@@ -174,11 +174,11 @@ export class FaReportsService {
   }
 
   /** Projected depreciation by category and month for assets in service now. */
-  forecast(ctx: CompanyContext, q: { from_period_id: string; months: number }) {
+  forecast(ctx: CompanyContext, q: { period_id: string; months: number }) {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await this.reports.company(tx, ctx.companyId);
       const minor = company.minor_units;
-      const period = await tx.maybeOne<{ start_date: string }>('SELECT start_date FROM gl.fiscal_periods WHERE company_id = $1 AND id = $2', [ctx.companyId, q.from_period_id]);
+      const period = await tx.maybeOne<{ start_date: string }>('SELECT start_date FROM gl.fiscal_periods WHERE company_id = $1 AND id = $2', [ctx.companyId, q.period_id]);
       if (!period) throw notFound('period');
       const start = `${period.start_date.slice(0, 7)}-01`;
       const months = Array.from({ length: q.months }, (_, i) => {

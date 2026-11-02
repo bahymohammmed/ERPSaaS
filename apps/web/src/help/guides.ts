@@ -2,7 +2,7 @@
  * In-app user guide: one entry per screen, in Arabic and English. HelpButton shows the entry
  * matching the current route; /help lists them all.
  */
-export type GuideSection = 'start' | 'ledger' | 'periodEnd' | 'group' | 'reports' | 'admin' | 'platform';
+export type GuideSection = 'start' | 'ledger' | 'periodEnd' | 'assets' | 'group' | 'reports' | 'admin' | 'platform';
 
 type GuideText = { title: string; summary: string; steps: string[]; tips: string[] };
 
@@ -19,6 +19,7 @@ export const SECTION_TITLES: Record<GuideSection, { en: string; ar: string }> = 
   start: { en: 'Getting started', ar: 'البداية' },
   ledger: { en: 'General ledger', ar: 'الأستاذ العام' },
   periodEnd: { en: 'Period-end', ar: 'نهاية الفترة' },
+  assets: { en: 'Fixed assets', ar: 'الأصول الثابتة' },
   group: { en: 'Group companies', ar: 'شركات المجموعة' },
   reports: { en: 'Reports', ar: 'التقارير' },
   admin: { en: 'Administration', ar: 'الإدارة' },
@@ -533,7 +534,7 @@ export const GUIDES: Guide[] = [
     paths: ['/gl/import'],
     en: {
       title: 'Excel import',
-      summary: 'Import the chart of accounts or journal entries from Excel.',
+      summary: 'Import the chart of accounts, journal entries or an opening fixed asset register from Excel.',
       steps: [
         'Choose Download template for accounts or journals and fill it in.',
         'Choose the file and Preview: every row is checked and errors are listed by row.',
@@ -544,7 +545,7 @@ export const GUIDES: Guide[] = [
     },
     ar: {
       title: 'الاستيراد من Excel',
-      summary: 'استيراد دليل الحسابات أو القيود من ملف Excel.',
+      summary: 'استيراد دليل الحسابات أو القيود أو سجل افتتاحي للأصول الثابتة من ملف Excel.',
       steps: [
         'اضغط «تنزيل القالب» للحسابات أو القيود واملأه.',
         'اختر الملف واضغط «معاينة»: يُفحص كل سطر وتظهر الأخطاء برقم السطر.',
@@ -552,6 +553,136 @@ export const GUIDES: Guide[] = [
         'اضغط «استيراد». للقيود اختر «ترحيل القيود المستوردة» لترحيلها في الخطوة نفسها.',
       ],
       tips: ['الاستيراد كامل أو لا شيء: إذا فشل أي سطر لا يُحفظ شيء.'],
+    },
+  },
+
+  // ---------------------------------------------------------------- fixed assets
+  {
+    id: 'asset-register',
+    section: 'assets',
+    paths: ['/fa/assets'],
+    en: {
+      title: 'Asset register',
+      summary: 'Every fixed asset of the company with its cost, accumulated depreciation, net book value and status. The totals at the top cover assets in service.',
+      steps: [
+        'Search by code, name, serial number, location or custodian, and filter by category or status.',
+        'Choose New asset to register a purchase, or Excel import to load an existing register.',
+        'Select an asset to see its details, depreciation history and actions.',
+      ],
+      tips: [
+        'Statuses: Draft (not yet in service), In service, Fully depreciated (book value has reached residual value) and Disposed.',
+        'Run Reports → PP&E movement schedule at period end; it checks the register against the ledger.',
+      ],
+    },
+    ar: {
+      title: 'سجل الأصول',
+      summary: 'جميع الأصول الثابتة للشركة بتكلفتها ومجمع استهلاكها وصافي قيمتها الدفترية وحالتها. الإجماليات في الأعلى تخص الأصول قيد الاستخدام.',
+      steps: [
+        'ابحث بالرمز أو الاسم أو الرقم التسلسلي أو الموقع أو المسؤول، وصفِّ حسب الفئة أو الحالة.',
+        'اضغط «أصل جديد» لتسجيل شراء، أو «الاستيراد من Excel» لتحميل سجل قائم.',
+        'افتح أي أصل لعرض تفاصيله وسجل استهلاكه والإجراءات المتاحة.',
+      ],
+      tips: [
+        'الحالات: مسودة (لم يبدأ استخدامه)، قيد الاستخدام، مستهلك بالكامل (بلغت قيمته الدفترية القيمة التخريدية)، ومستبعد.',
+        'شغّل التقارير ← جدول حركة الممتلكات والمعدات في نهاية الفترة؛ فهو يطابق السجل مع الأستاذ العام.',
+      ],
+    },
+  },
+  {
+    id: 'asset-detail',
+    section: 'assets',
+    paths: ['/fa/assets/'],
+    en: {
+      title: 'Registering and managing an asset',
+      summary: 'Create an asset, put it into service, and later transfer or dispose of it. Every step posts to the ledger automatically.',
+      steps: [
+        'Enter code, names, category, cost center, acquisition date and cost. Depreciation method, useful life and residual value come from the category unless you change them. Save.',
+        'Choose Put in service. "Post the purchase now" debits the asset account and credits the account it was paid from. "The cost is already in the ledger" posts nothing; use it for opening balances, with the depreciation already charged.',
+        'Transfer moves the asset to another cost center; later depreciation is charged there.',
+        'Dispose / sell: enter the date and any proceeds. Depreciation is brought up to that date, cost and accumulated depreciation are removed, and the gain or loss is posted.',
+        'Reverse disposal returns the asset to service if the disposal was a mistake.',
+      ],
+      tips: [
+        'Depreciation starts on the in-service date and is pro rata by days in the first month.',
+        'Draft assets can be edited or deleted. Once in service, only descriptive fields (names, location, custodian, serial number, notes) can change.',
+        'The Depreciation history and History tabs link to each journal entry.',
+      ],
+    },
+    ar: {
+      title: 'تسجيل الأصل وإدارته',
+      summary: 'أنشئ أصلاً وابدأ استخدامه، ثم انقله أو استبعده لاحقاً. كل خطوة تُرحّل إلى الأستاذ العام تلقائياً.',
+      steps: [
+        'أدخل الرمز والاسمين والفئة ومركز التكلفة وتاريخ الاقتناء والتكلفة. تؤخذ طريقة الاستهلاك والعمر الإنتاجي والقيمة التخريدية من الفئة ما لم تغيّرها. ثم احفظ.',
+        'اضغط «بدء الاستخدام». خيار «ترحيل قيد الشراء الآن» يجعل حساب الأصل مديناً والحساب الذي تم الدفع منه دائناً. وخيار «التكلفة مسجلة في الدفاتر مسبقاً» لا يرحّل شيئاً؛ استخدمه للأرصدة الافتتاحية مع الاستهلاك المحتسب حتى تاريخه.',
+        '«نقل» ينقل الأصل إلى مركز تكلفة آخر، ويُحمّل الاستهلاك اللاحق عليه.',
+        '«استبعاد / بيع»: أدخل التاريخ والمتحصلات إن وجدت. يُحتسب الاستهلاك حتى ذلك التاريخ، ثم تُستبعد التكلفة ومجمع الاستهلاك ويُرحّل الربح أو الخسارة.',
+        '«عكس الاستبعاد» يعيد الأصل إلى الاستخدام إذا تم الاستبعاد بالخطأ.',
+      ],
+      tips: [
+        'يبدأ الاستهلاك من تاريخ بداية الاستخدام ويُحتسب في الشهر الأول بنسبة الأيام.',
+        'يمكن تعديل الأصل المسودة أو حذفه. بعد بدء الاستخدام يمكن تعديل البيانات الوصفية فقط (الاسمان والموقع والمسؤول والرقم التسلسلي والملاحظات).',
+        'تبويبا «سجل الاستهلاك» و«السجل» يرتبطان بكل قيد يومية.',
+      ],
+    },
+  },
+  {
+    id: 'asset-categories',
+    section: 'assets',
+    paths: ['/fa/categories'],
+    en: {
+      title: 'Asset categories',
+      summary: 'Categories hold the accounts and default depreciation rules for a group of assets. Land, buildings, machinery, vehicles, furniture and computers are created with the chart of accounts.',
+      steps: [
+        'Choose Add, or edit an existing category.',
+        'Choose the depreciation method: straight line (useful life in months), declining balance (annual % of book value) or not depreciated (e.g. land). Optionally set a residual value as a percentage of cost.',
+        'Choose the asset, accumulated depreciation, depreciation expense and gain/loss on disposal accounts.',
+        'Tick the lock option so that only the fixed asset module can post to the asset and accumulated depreciation accounts; this keeps the register and the ledger in agreement.',
+      ],
+      tips: ['Changing a category affects new assets only; existing assets keep their own settings.', 'A category with assets cannot be deleted; make it inactive.'],
+    },
+    ar: {
+      title: 'فئات الأصول',
+      summary: 'تحدد الفئات الحسابات وقواعد الاستهلاك الافتراضية لمجموعة من الأصول. تُنشأ فئات الأراضي والمباني والآلات والسيارات والأثاث والحاسبات مع دليل الحسابات.',
+      steps: [
+        'اضغط «إضافة» أو عدّل فئة قائمة.',
+        'اختر طريقة الاستهلاك: القسط الثابت (العمر الإنتاجي بالأشهر)، أو القسط المتناقص (نسبة سنوية من القيمة الدفترية)، أو لا يستهلك (مثل الأراضي). ويمكن تحديد قيمة تخريدية كنسبة من التكلفة.',
+        'اختر حسابات الأصل ومجمع الاستهلاك ومصروف الاستهلاك وأرباح / خسائر الاستبعاد.',
+        'فعّل خيار القفل ليقتصر الترحيل إلى حسابي الأصل ومجمع الاستهلاك على وحدة الأصول الثابتة؛ وبذلك يبقى السجل مطابقاً للأستاذ العام.',
+      ],
+      tips: ['تعديل الفئة يؤثر على الأصول الجديدة فقط؛ تحتفظ الأصول القائمة بإعداداتها.', 'لا يمكن حذف فئة مرتبطة بأصول؛ اجعلها غير نشطة.'],
+    },
+  },
+  {
+    id: 'depreciation',
+    section: 'assets',
+    paths: ['/fa/depreciation'],
+    en: {
+      title: 'Monthly depreciation',
+      summary: 'Calculates depreciation for every asset in service for a period and posts one journal entry, split by expense account and cost center.',
+      steps: [
+        'Choose the period and Preview: each asset shows the dates covered and the amount.',
+        'Choose Post depreciation. The entry is dated on the last day of the period.',
+        'If a mistake is found, Reverse the latest run, correct the assets, and post it again.',
+      ],
+      tips: [
+        'Run periods in order. If a month was skipped, the next run catches it up automatically.',
+        'Only the latest run can be reversed, and only while its period is open.',
+        'Assets reach Fully depreciated status automatically when book value reaches residual value.',
+      ],
+    },
+    ar: {
+      title: 'الاستهلاك الشهري',
+      summary: 'يحتسب الاستهلاك لكل أصل قيد الاستخدام عن الفترة ويرحّل قيداً واحداً موزعاً حسب حساب المصروف ومركز التكلفة.',
+      steps: [
+        'اختر الفترة واضغط «معاينة»: يظهر لكل أصل الفترة المغطاة والمبلغ.',
+        'اضغط «ترحيل الاستهلاك». يكون القيد بتاريخ آخر يوم في الفترة.',
+        'عند اكتشاف خطأ، اعكس آخر عملية، وصحّح الأصول، ثم رحّلها مجدداً.',
+      ],
+      tips: [
+        'رحّل الفترات بالترتيب. إذا تم تخطي شهر فإن العملية التالية تحتسبه تلقائياً.',
+        'يمكن عكس آخر عملية فقط، وما دامت فترتها مفتوحة.',
+        'تتحول الأصول تلقائياً إلى «مستهلك بالكامل» عندما تبلغ قيمتها الدفترية القيمة التخريدية.',
+      ],
     },
   },
 
@@ -620,7 +751,7 @@ export const GUIDES: Guide[] = [
     en: {
       title: 'Reports',
       summary:
-        'Trial balance, account statement, journal register, income statement, balance sheet, cash flow, cost center analysis and summary, budget vs actual, designed statements, intercompany reconciliation and consolidated reports.',
+        'Trial balance, account statement, journal register, income statement, balance sheet, cash flow, cost center analysis and summary, budget vs actual, designed statements, intercompany reconciliation, consolidated reports, and the fixed asset register, PP&E movement schedule and depreciation forecast.',
       steps: [
         'Pick the report from Reports in the menu.',
         'Set the filters: periods or dates, account level, cost center, comparison with the prior year, and so on.',
@@ -636,7 +767,7 @@ export const GUIDES: Guide[] = [
     ar: {
       title: 'التقارير',
       summary:
-        'ميزان المراجعة، وكشف الحساب، ودفتر اليومية، وقائمة الدخل، والمركز المالي، والتدفقات النقدية، وتحليل مراكز التكلفة وملخصها، والموازنة مقابل الفعلي، والقوائم المصممة، ومطابقة الحسابات بين الشركات، والتقارير الموحدة.',
+        'ميزان المراجعة، وكشف الحساب، ودفتر اليومية، وقائمة الدخل، والمركز المالي، والتدفقات النقدية، وتحليل مراكز التكلفة وملخصها، والموازنة مقابل الفعلي، والقوائم المصممة، ومطابقة الحسابات بين الشركات، والتقارير الموحدة، وسجل الأصول الثابتة وجدول حركة الممتلكات والمعدات وتوقعات الاستهلاك.',
       steps: [
         'اختر التقرير من قسم التقارير في القائمة.',
         'حدد الفلاتر: الفترات أو التواريخ، ومستوى الحساب، ومركز التكلفة، والمقارنة بالسنة السابقة وغيرها.',

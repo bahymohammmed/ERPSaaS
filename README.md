@@ -186,6 +186,17 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
 - Every platform action on a tenant is written to that tenant's audit log. Cross-tenant reads go through `SECURITY DEFINER` functions that re-check the caller.
 - `PUBLIC_SIGNUP=off` closes self-service sign-up, so tenants are created only from the console. Docker Compose and Cloudflare default to `off`.
 
+### Fixed assets (IAS 16)
+- **Categories** (seeded with the chart of accounts: land, buildings, machinery, vehicles, furniture, computers) hold the asset, accumulated depreciation, expense and disposal gain/loss accounts and the default method: straight line, declining balance or none. A category can lock its asset accounts so only this module posts to them.
+- **Register**: code, bilingual names, category, cost center, location, custodian, serial number, cost, residual value, useful life.
+  - An asset is put into service either by posting the purchase (debit asset, credit the paying account) or by recognising a cost already in the ledger, optionally with accumulated depreciation taken over from a previous system.
+- **Depreciation runs** per period: preview, then one entry split by expense account and cost center. Part months are pro rata by days, skipped months are caught up, assets become *fully depreciated* automatically, and only the latest run can be reversed.
+- **Disposal / sale**: depreciation is brought to the disposal date, then cost and accumulated depreciation are removed and the gain or loss is posted. Disposals can be reversed.
+- **Transfers** between cost centers; later depreciation follows the asset.
+- **Excel import** of an opening register.
+- **Reports**: asset register, IAS 16 movement schedule (checked against the ledger) and depreciation forecast.
+- Entries carry source module `FA` and have their own period status; they are reversed from the fixed asset screens only.
+
 ### Interface and design
 - **Light, dark and system themes.** Switch from the sun/moon button in the header, or from Appearance in the user menu. Colours come from one set of tokens (`apps/web/src/app/theme.ts`, `globals.css`).
 - **Navigation**: the sidebar is grouped into overview, general ledger, period-end, group companies, reports and administration. It collapses to an icon rail, with labels as tooltips, and remembers your choice.
@@ -247,6 +258,7 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 | Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary,budget-vs-actual,statement}`, `GET gl/reports/voucher/:id`, with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
 | Group | `gl/intercompany/{partners,transactions}`, `GET gl/reports/{cash-flow,intercompany-reconciliation}`, `gl/cost-center-versions`, `consolidation/groups` (+ `/:id/adjustments`, `/:id/{worksheet,balance-sheet,income-statement}`) |
 | Platform | `GET platform/me`, `platform/tenants` (list, create), `GET/PATCH platform/tenants/:id`, `POST platform/tenants/:id/users/:userId/reset-credentials`, `POST platform/mfa/{setup,enable,disable}`; `GET auth/config` (public) |
+| Fixed assets | `fa/categories`, `fa/assets` (+ `/:id/{activate,transfer,dispose,reverse-disposal}`), `fa/depreciation/{preview,run,runs}`, `POST fa/depreciation/runs/:id/reverse`, `fa/import` (+ `/template`), `GET fa/reports/{register,movement,forecast}` |
 | Security | `POST auth/mfa/{setup,enable,disable}`, `POST admin/users/:id/mfa-reset`, `GET admin/export` |
 | Period-end | `gl/recurring` (+ `/:id/run`), `POST gl/fx-revaluation[/preview]`, `gl/allocation/{drivers,rules,runs}`, `POST gl/allocation/preview`, `gl/budgets` (+ `/lines`, `/generate`, `/status`), `gl/year-end/{rules,close,reopen}`, `GET gl/year-end/:fiscalYearId/preview`, `gl/statements`, `gl/import/{accounts,journals}`, `GET gl/import/templates/:kind` |
 

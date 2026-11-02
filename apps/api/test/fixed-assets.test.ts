@@ -156,7 +156,7 @@ describe('fixed assets', () => {
 
     const register = await f.api.get('/fa/reports/register?as_of=2026-06-30');
     expect((register.body.rows as Row[]).at(-1)!.cells).toMatchObject({ cost: '22000.000', accumulated: '1269.893', nbv: '20730.107' });
-    const forecast = await f.api.get(`/fa/reports/forecast?from_period_id=${period('2026-07')}&months=6`);
+    const forecast = await f.api.get(`/fa/reports/forecast?period_id=${period('2026-07')}&months=6`);
     expect((forecast.body.rows as Row[]).find((r) => typeof r.cells.name === 'object' && r.cells.name?.en === 'Vehicles')!.cells.m0).toBe('200.000');
   });
 

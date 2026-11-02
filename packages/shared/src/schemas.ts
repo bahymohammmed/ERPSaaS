@@ -687,4 +687,4 @@ export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/)
 
 export const faRegisterQuerySchema = z.object({ as_of: dateSchema, category_id: uuidSchema.optional(), ...reportFormat });
 export const faMovementQuerySchema = z.object({ from: dateSchema, to: dateSchema, ...reportFormat });
-export const faForecastQuerySchema = z.object({ from_period_id: uuidSchema, months: z.coerce.number().int().min(1).max(24).default(12), ...reportFormat });
+export const faForecastQuerySchema = z.object({ period_id: uuidSchema, months: z.coerce.number().int().min(1).max(24).default(12), ...reportFormat });

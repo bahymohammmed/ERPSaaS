@@ -15,7 +15,7 @@ import { useCompanyQuery, useJournalTypes, usePeriods } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import type { Period } from '@/lib/types';
 
-type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement' | 'asOf' | 'group' | 'hierarchyVersion';
+type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement' | 'asOf' | 'group' | 'hierarchyVersion' | 'months';
 
 type ReportDef = { title: MessageKey; fields: Field[]; required: string[]; path?: (p: Record<string, string>) => string };
 
@@ -33,6 +33,9 @@ const REPORTS: Record<string, ReportDef> = {
   'consolidated-balance-sheet': { title: 'reportConsolidatedBs', fields: ['group', 'asOf'], required: ['group_id', 'as_of'], path: (p) => `/consolidation/groups/${p.group_id}/balance-sheet` },
   'consolidated-income-statement': { title: 'reportConsolidatedIs', fields: ['group', 'dateRange'], required: ['group_id', 'from', 'to'], path: (p) => `/consolidation/groups/${p.group_id}/income-statement` },
   'budget-vs-actual': { title: 'reportBudgetVsActual', fields: ['budget', 'periodRange', 'costCenter', 'level'], required: ['budget_id', 'from_period_id', 'to_period_id'] },
+  'fa-register': { title: 'reportFaRegister', fields: ['asOf'], required: ['as_of'], path: () => '/fa/reports/register' },
+  'fa-movement': { title: 'reportFaMovement', fields: ['dateRange'], required: ['from', 'to'], path: () => '/fa/reports/movement' },
+  'fa-forecast': { title: 'reportFaForecast', fields: ['period', 'months'], required: ['period_id'], path: () => '/fa/reports/forecast' },
   statement: { title: 'reportStatement', fields: ['statement', 'periodRange', 'period', 'costCenter', 'compare'], required: ['statement_id'] },
 };
 
@@ -56,6 +59,7 @@ const defaultParams = (periods: Period[]): Params => {
     compare: 'none',
     include_zero: 'false',
     account_scope: 'PL',
+    months: '12',
   };
 };
 
@@ -127,6 +131,7 @@ const ReportScreen = () => {
       if (field === 'statement') add('statement_id');
       if (field === 'asOf') add('as_of');
       if (field === 'hierarchyVersion') add('hierarchy_version_id');
+      if (field === 'months') add('months');
     }
     return relevant;
   };
@@ -248,6 +253,9 @@ const ReportScreen = () => {
               onChange={(v) => set('compare', v)}
               allowDeselect={false}
             />
+          )}
+          {show('months') && (
+            <NumberInput label={t('months')} min={1} max={24} value={params.months ? Number(params.months) : 12} onChange={(v) => set('months', v === '' ? '12' : String(v))} />
           )}
           {show('includeZero') && (
             <Checkbox mt={{ base: 0, md: 30 }} label={t('includeZero')} checked={params.include_zero === 'true'} onChange={(e) => set('include_zero', e.currentTarget.checked ? 'true' : 'false')} />

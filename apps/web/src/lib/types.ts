@@ -1,4 +1,4 @@
-import type { AccountType, CostCenterType, DimensionRule, JournalStatus, ModuleCode, PeriodStatus, Permission } from '@erp/shared';
+import type { AccountType, AssetStatus, CostCenterType, DepreciationMethod, DimensionRule, JournalStatus, ModuleCode, PeriodStatus, Permission } from '@erp/shared';
 
 export type Named = { id: string; code: string; name_ar: string; name_en: string };
 
@@ -103,4 +103,60 @@ export type JournalEntry = {
   auto_reverse_date: string | null;
   lines: JournalLine[];
   attachments: { id: string; file_name: string; size_bytes: number; uploaded_at: string }[];
+};
+
+export type FaCategory = Named & {
+  id: string;
+  code: string;
+  asset_account_id: string;
+  accum_dep_account_id: string | null;
+  dep_expense_account_id: string | null;
+  disposal_account_id: string;
+  method: DepreciationMethod;
+  useful_life_months: number | null;
+  declining_rate: string | null;
+  residual_percent: string;
+  is_active: boolean;
+  accounts_locked: boolean;
+  asset_count: number;
+};
+
+export type FaAsset = Named & {
+  id: string;
+  code: string;
+  category_id: string;
+  category_code: string;
+  category_name_ar: string;
+  category_name_en: string;
+  cost_center_id: string;
+  cost_center_code: string;
+  cost_center_name_ar: string;
+  cost_center_name_en: string;
+  location: string | null;
+  custodian: string | null;
+  serial_no: string | null;
+  acquisition_date: string;
+  in_service_date: string;
+  cost: string;
+  residual_value: string;
+  method: DepreciationMethod;
+  useful_life_months: number | null;
+  declining_rate: string | null;
+  status: AssetStatus;
+  depreciated_to: string | null;
+  disposal_date: string | null;
+  accumulated: string;
+  net_book_value: string;
+};
+
+export type FaAssetDetail = FaAsset & {
+  notes: string | null;
+  opening_accum_dep: string;
+  disposal_proceeds: string | null;
+  acquisition_entry_id: string | null;
+  acquisition_entry_no: string | null;
+  disposal_entry_id: string | null;
+  disposal_entry_no: string | null;
+  depreciation: { run_id: string; from_date: string; to_date: string; amount: string; status: string; period_code: string; entry_no: string | null; entry_id: string | null }[];
+  events: { id: string; event_type: 'ACQUIRE' | 'TRANSFER' | 'DISPOSE' | 'DISPOSAL_REVERSED'; event_date: string; amount: string | null; entry_id: string | null; entry_no: string | null; created_by_name: string | null; details: Record<string, unknown> }[];
 };

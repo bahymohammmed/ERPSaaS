@@ -13,7 +13,14 @@ import { useSession } from '@/lib/session';
 
 type Result = { committed: boolean; total: number; errors: number; rows: { row: number; key: string; action: string; status: 'ok' | 'error'; message?: string }[] };
 
-const ImportCard = ({ kind, title }: { kind: 'accounts' | 'journals'; title: MessageKey }) => {
+type Kind = 'accounts' | 'journals' | 'fixed-assets';
+const ENDPOINTS: Record<Kind, { upload: string; template: string }> = {
+  accounts: { upload: '/gl/import/accounts', template: '/gl/import/templates/accounts' },
+  journals: { upload: '/gl/import/journals', template: '/gl/import/templates/journals' },
+  'fixed-assets': { upload: '/fa/import', template: '/fa/import/template' },
+};
+
+const ImportCard = ({ kind, title }: { kind: Kind; title: MessageKey }) => {
   const { t, errorText } = useI18n();
   const { can, company } = useSession();
   const queryClient = useQueryClient();
@@ -27,7 +34,7 @@ const ImportCard = ({ kind, title }: { kind: 'accounts' | 'journals'; title: Mes
     setBusy(true);
     try {
       const params = new URLSearchParams({ commit: String(commit), ...(kind === 'journals' ? { post: String(post) } : {}) });
-      const res = await upload<Result>(`/gl/import/${kind}?${params}`, file);
+      const res = await upload<Result>(`${ENDPOINTS[kind].upload}?${params}`, file);
       setResult(res);
       if (res.committed) {
         notifySuccess(t('saved'));
@@ -44,7 +51,7 @@ const ImportCard = ({ kind, title }: { kind: 'accounts' | 'journals'; title: Mes
     <Paper withBorder p="md">
       <Group justify="space-between" mb="sm">
         <Title order={5}>{t(title)}</Title>
-        <Button size="xs" variant="subtle" leftSection={<IconDownload size={14} />} onClick={() => download(`/gl/import/templates/${kind}`, undefined, `${kind}-template.xlsx`).catch((e: unknown) => notifyError(errorText(e)))}>
+        <Button size="xs" variant="subtle" leftSection={<IconDownload size={14} />} onClick={() => download(ENDPOINTS[kind].template, undefined, `${kind}-template.xlsx`).catch((e: unknown) => notifyError(errorText(e)))}>
           {t('downloadTemplate')}
         </Button>
       </Group>
@@ -113,12 +120,14 @@ const ImportCard = ({ kind, title }: { kind: 'accounts' | 'journals'; title: Mes
 
 const ImportPage = () => {
   const { t } = useI18n();
+  const { can } = useSession();
   return (
     <>
       <PageHeader title={t('navImport')} />
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
         <ImportCard kind="accounts" title="importAccounts" />
         <ImportCard kind="journals" title="importJournals" />
+        {can('fa.manage') && <ImportCard kind="fixed-assets" title="importAssets" />}
       </SimpleGrid>
     </>
   );
