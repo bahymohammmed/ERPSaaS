@@ -199,6 +199,7 @@ export class AdminService {
         'gl.recurring_entries', 'gl.statistical_drivers', 'gl.driver_values', 'gl.allocation_rules', 'gl.allocation_targets', 'gl.allocation_runs',
         'gl.budgets', 'gl.budget_lines', 'gl.appropriation_rules', 'gl.statements', 'gl.statement_rows',
         'gl.intercompany_partners', 'gl.intercompany_links', 'gl.consolidation_groups', 'gl.consolidation_members', 'gl.consolidation_adjustments',
+        'fa.categories', 'fa.assets', 'fa.depreciation_runs', 'fa.depreciation_lines', 'fa.asset_events',
       ];
       const data: Record<string, unknown[]> = {};
       for (const table of tables) data[table] = await tx.query(`SELECT * FROM ${table}`);

@@ -26,8 +26,14 @@ export type CostCenterType = (typeof COST_CENTER_TYPES)[number];
 export const CASH_FLOW_CATEGORIES = ['CASH', 'OPERATING', 'INVESTING', 'FINANCING'] as const;
 export type CashFlowCategory = (typeof CASH_FLOW_CATEGORIES)[number];
 
-export const MODULES = ['GL', 'AP', 'AR', 'INV', 'PAY'] as const;
+export const MODULES = ['GL', 'AP', 'AR', 'INV', 'PAY', 'FA'] as const;
 export type ModuleCode = (typeof MODULES)[number];
+
+export const DEPRECIATION_METHODS = ['STRAIGHT_LINE', 'DECLINING_BALANCE', 'NONE'] as const;
+export type DepreciationMethod = (typeof DEPRECIATION_METHODS)[number];
+
+export const ASSET_STATUSES = ['DRAFT', 'ACTIVE', 'FULLY_DEPRECIATED', 'DISPOSED'] as const;
+export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
 export const PERIOD_STATUSES = ['OPEN', 'CLOSED', 'LOCKED'] as const;
 export type PeriodStatus = (typeof PERIOD_STATUSES)[number];

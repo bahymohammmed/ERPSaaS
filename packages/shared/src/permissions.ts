@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   'gl.budget.manage',
   'gl.close.manage',
   'gl.consolidation.manage',
+  'fa.view',
+  'fa.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -41,17 +43,19 @@ export const SYSTEM_ROLES: Record<SystemRoleCode, { name_ar: string; name_en: st
       'gl.budget.manage',
       'gl.close.manage',
       'gl.consolidation.manage',
+      'fa.view',
+      'fa.manage',
       'admin.audit',
     ],
   },
   ACCOUNTANT: {
     name_ar: 'محاسب',
     name_en: 'Accountant',
-    permissions: ['gl.master.view', 'gl.rates.manage', 'gl.journal.view', 'gl.journal.create', 'gl.report.view'],
+    permissions: ['gl.master.view', 'gl.rates.manage', 'gl.journal.view', 'gl.journal.create', 'gl.report.view', 'fa.view', 'fa.manage'],
   },
   VIEWER: {
     name_ar: 'مستعرض',
     name_en: 'Viewer',
-    permissions: ['gl.master.view', 'gl.journal.view', 'gl.report.view'],
+    permissions: ['gl.master.view', 'gl.journal.view', 'gl.report.view', 'fa.view'],
   },
 };

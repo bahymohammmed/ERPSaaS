@@ -200,8 +200,22 @@ export const DEFAULT_JOURNAL_TYPES: { code: string; ar: string; en: string; syst
   { code: 'FXR', ar: 'إعادة تقييم العملات', en: 'FX revaluation', system: true, module: 'GL' },
   { code: 'ALC', ar: 'قيد توزيع التكاليف', en: 'Cost allocation', system: true, module: 'GL' },
   { code: 'IC', ar: 'قيود بين الشركات', en: 'Intercompany', system: true, module: 'GL' },
+  { code: 'FA', ar: 'قيود الأصول الثابتة', en: 'Fixed asset postings', system: true, module: 'FA' },
   { code: 'AP', ar: 'قيود الموردين', en: 'Payables postings', system: true, module: 'AP' },
   { code: 'AR', ar: 'قيود العملاء', en: 'Receivables postings', system: true, module: 'AR' },
   { code: 'INV', ar: 'قيود المخزون', en: 'Inventory postings', system: true, module: 'INV' },
   { code: 'PAY', ar: 'قيود الرواتب', en: 'Payroll postings', system: true, module: 'PAY' },
 ];
+
+/** Default fixed asset categories (by template account codes) created with the chart of accounts. */
+export const DEFAULT_ASSET_CATEGORIES: { code: string; ar: string; en: string; asset: string; accum: string | null; method: 'STRAIGHT_LINE' | 'NONE'; life: number | null }[] = [
+  { code: 'LND', ar: 'أراضي', en: 'Land', asset: '120101', accum: null, method: 'NONE', life: null },
+  { code: 'BLD', ar: 'مباني', en: 'Buildings', asset: '120102', accum: '120201', method: 'STRAIGHT_LINE', life: 240 },
+  { code: 'MCH', ar: 'آلات ومعدات', en: 'Machinery and equipment', asset: '120103', accum: '120202', method: 'STRAIGHT_LINE', life: 120 },
+  { code: 'VEH', ar: 'سيارات', en: 'Vehicles', asset: '120104', accum: '120203', method: 'STRAIGHT_LINE', life: 60 },
+  { code: 'FUR', ar: 'أثاث وتجهيزات', en: 'Furniture and fixtures', asset: '120105', accum: '120204', method: 'STRAIGHT_LINE', life: 60 },
+  { code: 'CMP', ar: 'أجهزة حاسب آلي', en: 'Computer equipment', asset: '120106', accum: '120205', method: 'STRAIGHT_LINE', life: 36 },
+];
+export const TEMPLATE_DEPRECIATION_ACCOUNT = '5501';
+export const TEMPLATE_DISPOSAL_ACCOUNT = '4203';
+

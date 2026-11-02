@@ -12,7 +12,7 @@ import { loadCompany, PostingEngine } from './posting.engine';
 export type ImportRowResult = { row: number; key: string; action: 'create' | 'update' | 'post' | 'draft'; status: 'ok' | 'error'; message?: string };
 export type ImportResult = { committed: boolean; total: number; errors: number; rows: ImportRowResult[] };
 
-type SheetRow = { row: number; values: Record<string, string> };
+export type SheetRow = { row: number; values: Record<string, string> };
 
 const ACCOUNT_COLUMNS = ['code', 'name_ar', 'name_en', 'parent_code', 'type', 'posting', 'cost_center_rule', 'cash_flow_category', 'control_module', 'revalue', 'active'];
 const JOURNAL_COLUMNS = ['entry', 'date', 'journal_type', 'description', 'reference', 'account', 'cost_center', 'line_description', 'currency', 'rate', 'debit', 'credit'];
@@ -181,7 +181,7 @@ export class ImportService {
     });
   }
 
-  private async run(ctx: CompanyContext, commit: boolean, process: (tx: Tx) => Promise<ImportRowResult[]>): Promise<ImportResult> {
+  async run(ctx: CompanyContext, commit: boolean, process: (tx: Tx) => Promise<ImportRowResult[]>): Promise<ImportResult> {
     const execute = async (tx: Tx) => {
       const rows = await process(tx);
       const errors = rows.filter((r) => r.status === 'error').length;
@@ -199,7 +199,7 @@ export class ImportService {
     }
   }
 
-  private async savepoint(tx: Tx, base: Omit<ImportRowResult, 'status'>, fn: () => Promise<void>): Promise<ImportRowResult> {
+  async savepoint(tx: Tx, base: Omit<ImportRowResult, 'status'>, fn: () => Promise<void>): Promise<ImportRowResult> {
     await tx.query('SAVEPOINT import_row');
     try {
       await fn();
@@ -211,7 +211,7 @@ export class ImportService {
     }
   }
 
-  private async readSheet(file: Buffer, columns: string[]): Promise<SheetRow[]> {
+  async readSheet(file: Buffer, columns: string[]): Promise<SheetRow[]> {
     const workbook = new ExcelJS.Workbook();
     try {
       await workbook.xlsx.load(file as unknown as ArrayBuffer);

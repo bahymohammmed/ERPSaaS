@@ -3,6 +3,7 @@ import {
   ACCOUNT_TYPES,
   CASH_FLOW_CATEGORIES,
   COST_CENTER_TYPES,
+  DEPRECIATION_METHODS,
   DIGIT_STYLES,
   DIMENSION_RULES,
   LOCALES,
@@ -100,6 +101,89 @@ export const platformCredentialsResetSchema = z.object({
   password: z.string().min(10).max(200).optional(),
   reset_mfa: z.boolean().default(false),
 });
+
+// ---------- Fixed assets ----------
+
+const depreciationFields = {
+  method: z.enum(DEPRECIATION_METHODS),
+  useful_life_months: z.number().int().min(1).max(1200).nullish(),
+  declining_rate: amountSchema.refine((v) => Number(v) > 0 && Number(v) <= 100, { message: 'Rate must be between 0 and 100' }).nullish(),
+};
+const depreciationIssues = (v: { method: string; useful_life_months?: number | null; declining_rate?: string | null }, ctx: z.RefinementCtx) => {
+  if (v.method === 'STRAIGHT_LINE' && !v.useful_life_months) ctx.addIssue({ code: 'custom', path: ['useful_life_months'], message: 'Useful life is required' });
+  if (v.method === 'DECLINING_BALANCE' && !v.declining_rate) ctx.addIssue({ code: 'custom', path: ['declining_rate'], message: 'Rate is required' });
+};
+
+export const faCategorySchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    asset_account_id: uuidSchema,
+    accum_dep_account_id: uuidSchema.nullish(),
+    dep_expense_account_id: uuidSchema.nullish(),
+    disposal_account_id: uuidSchema,
+    ...depreciationFields,
+    residual_percent: amountSchema.refine((v) => Number(v) < 100, { message: 'Must be below 100' }).default('0'),
+    is_active: z.boolean().default(true),
+    /** Make the asset and accumulated depreciation accounts accept postings from this module only. */
+    lock_accounts: z.boolean().default(false),
+  })
+  .refine(requireOneName, nameIssue)
+  .superRefine((v, ctx) => {
+    depreciationIssues(v, ctx);
+    if (v.method !== 'NONE' && (!v.accum_dep_account_id || !v.dep_expense_account_id)) {
+      ctx.addIssue({ code: 'custom', path: ['accum_dep_account_id'], message: 'Depreciation accounts are required' });
+    }
+  });
+export type FaCategoryInput = z.infer<typeof faCategorySchema>;
+
+/** Optional fields fall back to the category defaults. */
+export const faAssetSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    category_id: uuidSchema,
+    cost_center_id: uuidSchema,
+    location: z.string().trim().max(200).nullish(),
+    custodian: z.string().trim().max(200).nullish(),
+    serial_no: z.string().trim().max(100).nullish(),
+    acquisition_date: dateSchema,
+    in_service_date: dateSchema.nullish(),
+    cost: amountSchema.refine((v) => Number(v) > 0, { message: 'Cost must be positive' }),
+    residual_value: amountSchema.nullish(),
+    method: z.enum(DEPRECIATION_METHODS).nullish(),
+    useful_life_months: z.number().int().min(1).max(1200).nullish(),
+    declining_rate: amountSchema.nullish(),
+    notes: z.string().trim().max(2000).nullish(),
+  })
+  .refine(requireOneName, nameIssue);
+export type FaAssetInput = z.infer<typeof faAssetSchema>;
+
+/**
+ * POST: the module posts the purchase (debit the asset account, credit offset_account_id).
+ * EXISTING: the cost is already in the ledger (or the asset is taken over from a previous system,
+ * with accumulated depreciation up to opening_dep_date); nothing is posted.
+ */
+export const faActivateSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('POST'), offset_account_id: uuidSchema, description: z.string().trim().max(500).nullish() }),
+  z.object({ mode: z.literal('EXISTING'), opening_accum_dep: amountSchema.default('0'), opening_dep_date: dateSchema.nullish() }),
+]);
+export type FaActivateInput = z.infer<typeof faActivateSchema>;
+
+export const faTransferSchema = z.object({ cost_center_id: uuidSchema, transfer_date: dateSchema, notes: z.string().trim().max(500).nullish() });
+
+export const faDisposeSchema = z.object({
+  disposal_date: dateSchema,
+  proceeds: amountSchema.default('0'),
+  proceeds_account_id: uuidSchema.nullish(),
+  description: z.string().trim().max(500).nullish(),
+});
+
+export const faRunSchema = z.object({ period_id: uuidSchema });
+
+export const faImportRowSchema = faAssetSchema.and(
+  z.object({ opening_accum_dep: amountSchema.default('0'), opening_dep_date: dateSchema.nullish() }),
+);
 
 export const switchTenantSchema = z.object({ tenantId: uuidSchema });
 
@@ -598,3 +682,9 @@ export const costCenterVersionSchema = z
   .refine(requireOneName, nameIssue);
 
 export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
+
+// ---------- Fixed asset reports ----------
+
+export const faRegisterQuerySchema = z.object({ as_of: dateSchema, category_id: uuidSchema.optional(), ...reportFormat });
+export const faMovementQuerySchema = z.object({ from: dateSchema, to: dateSchema, ...reportFormat });
+export const faForecastQuerySchema = z.object({ from_period_id: uuidSchema, months: z.coerce.number().int().min(1).max(24).default(12), ...reportFormat });

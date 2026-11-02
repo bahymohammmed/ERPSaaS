@@ -2,9 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { DEFAULT_NORMAL_BALANCE, SYSTEM_ROLES, type SystemRoleCode } from '@erp/shared';
 import type { Tx } from '../db/db.service';
 import {
+  DEFAULT_ASSET_CATEGORIES,
   DEFAULT_JOURNAL_TYPES,
   KUWAIT_IFRS_COA,
   TEMPLATE_FX_GAIN_ACCOUNT,
+  TEMPLATE_DEPRECIATION_ACCOUNT,
+  TEMPLATE_DISPOSAL_ACCOUNT,
   TEMPLATE_FX_LOSS_ACCOUNT,
   TEMPLATE_RETAINED_EARNINGS_ACCOUNT,
   TEMPLATE_ROUNDING_ACCOUNT,
@@ -155,5 +158,25 @@ export class ProvisioningService {
       [companyId, ids.get(TEMPLATE_ROUNDING_ACCOUNT), ids.get(TEMPLATE_RETAINED_EARNINGS_ACCOUNT), ids.get(TEMPLATE_FX_GAIN_ACCOUNT), ids.get(TEMPLATE_FX_LOSS_ACCOUNT)],
     );
     await ensureCompanyDefaults(tx, tenantId, companyId);
+    for (const c of DEFAULT_ASSET_CATEGORIES) {
+      await tx.query(
+        `INSERT INTO fa.categories (tenant_id, company_id, code, name_ar, name_en, asset_account_id, accum_dep_account_id, dep_expense_account_id,
+           disposal_account_id, method, useful_life_months)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          tenantId,
+          companyId,
+          c.code,
+          c.ar,
+          c.en,
+          ids.get(c.asset),
+          c.accum ? ids.get(c.accum) : null,
+          c.method === 'NONE' ? null : ids.get(TEMPLATE_DEPRECIATION_ACCOUNT),
+          ids.get(TEMPLATE_DISPOSAL_ACCOUNT),
+          c.method,
+          c.life,
+        ],
+      );
+    }
   }
 }
