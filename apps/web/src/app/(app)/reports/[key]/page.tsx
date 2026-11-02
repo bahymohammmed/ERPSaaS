@@ -15,7 +15,7 @@ import { useCompanyQuery, useJournalTypes, usePeriods } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import type { Period } from '@/lib/types';
 
-type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement' | 'asOf' | 'group' | 'hierarchyVersion' | 'months';
+type Field = 'periodRange' | 'period' | 'dateRange' | 'account' | 'costCenter' | 'parentCostCenter' | 'level' | 'includeZero' | 'compare' | 'journalType' | 'accountScope' | 'budget' | 'statement' | 'asOf' | 'group' | 'hierarchyVersion' | 'months' | 'customer' | 'supplier';
 
 type ReportDef = { title: MessageKey; fields: Field[]; required: string[]; path?: (p: Record<string, string>) => string };
 
@@ -33,6 +33,10 @@ const REPORTS: Record<string, ReportDef> = {
   'consolidated-balance-sheet': { title: 'reportConsolidatedBs', fields: ['group', 'asOf'], required: ['group_id', 'as_of'], path: (p) => `/consolidation/groups/${p.group_id}/balance-sheet` },
   'consolidated-income-statement': { title: 'reportConsolidatedIs', fields: ['group', 'dateRange'], required: ['group_id', 'from', 'to'], path: (p) => `/consolidation/groups/${p.group_id}/income-statement` },
   'budget-vs-actual': { title: 'reportBudgetVsActual', fields: ['budget', 'periodRange', 'costCenter', 'level'], required: ['budget_id', 'from_period_id', 'to_period_id'] },
+  'ar-aging': { title: 'reportArAging', fields: ['asOf'], required: ['as_of'], path: () => '/sl/AR/reports/aging' },
+  'ap-aging': { title: 'reportApAging', fields: ['asOf'], required: ['as_of'], path: () => '/sl/AP/reports/aging' },
+  'customer-statement': { title: 'reportCustomerStatement', fields: ['customer', 'dateRange'], required: ['party_id', 'from', 'to'], path: () => '/sl/AR/reports/statement' },
+  'supplier-statement': { title: 'reportSupplierStatement', fields: ['supplier', 'dateRange'], required: ['party_id', 'from', 'to'], path: () => '/sl/AP/reports/statement' },
   'fa-register': { title: 'reportFaRegister', fields: ['asOf'], required: ['as_of'], path: () => '/fa/reports/register' },
   'fa-movement': { title: 'reportFaMovement', fields: ['dateRange'], required: ['from', 'to'], path: () => '/fa/reports/movement' },
   'fa-forecast': { title: 'reportFaForecast', fields: ['period', 'months'], required: ['period_id'], path: () => '/fa/reports/forecast' },
@@ -75,6 +79,8 @@ const ReportScreen = () => {
   const { data: statements = [] } = useCompanyQuery<StatementOption[]>(['statements'], '/gl/statements');
   const { data: groups = [] } = useCompanyQuery<Option[]>(['consolidation-groups'], '/consolidation/groups');
   const { data: versions = [] } = useCompanyQuery<Option[]>(['cc-versions'], '/gl/cost-center-versions');
+  const partySide = REPORTS[key]?.fields.includes('customer') ? 'AR' : REPORTS[key]?.fields.includes('supplier') ? 'AP' : null;
+  const { data: parties = [] } = useCompanyQuery<Option[]>(['sl-parties', partySide], `/sl/${partySide ?? 'AR'}/parties`, undefined, !!partySide);
   const reportPath = (p: Params) => report?.path?.(p) ?? `/gl/reports/${key}`;
   const report = REPORTS[key];
   const [params, setParams] = useState<Params | null>(null);
@@ -132,6 +138,7 @@ const ReportScreen = () => {
       if (field === 'asOf') add('as_of');
       if (field === 'hierarchyVersion') add('hierarchy_version_id');
       if (field === 'months') add('months');
+      if (field === 'customer' || field === 'supplier') add('party_id');
     }
     return relevant;
   };
@@ -252,6 +259,15 @@ const ReportScreen = () => {
               value={params.compare || 'none'}
               onChange={(v) => set('compare', v)}
               allowDeselect={false}
+            />
+          )}
+          {(show('customer') || show('supplier')) && (
+            <Select
+              label={t(show('customer') ? 'customer' : 'supplier')}
+              searchable
+              data={partySide ? parties.map((p) => ({ value: p.id, label: `${p.code} — ${name(p)}` })) : []}
+              value={params.party_id || null}
+              onChange={(v) => set('party_id', v)}
             />
           )}
           {show('months') && (

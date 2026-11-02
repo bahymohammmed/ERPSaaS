@@ -2,7 +2,7 @@
  * In-app user guide: one entry per screen, in Arabic and English. HelpButton shows the entry
  * matching the current route; /help lists them all.
  */
-export type GuideSection = 'start' | 'ledger' | 'periodEnd' | 'assets' | 'group' | 'reports' | 'admin' | 'platform';
+export type GuideSection = 'start' | 'trade' | 'ledger' | 'periodEnd' | 'assets' | 'group' | 'reports' | 'admin' | 'platform';
 
 type GuideText = { title: string; summary: string; steps: string[]; tips: string[] };
 
@@ -17,6 +17,7 @@ export type Guide = {
 
 export const SECTION_TITLES: Record<GuideSection, { en: string; ar: string }> = {
   start: { en: 'Getting started', ar: 'البداية' },
+  trade: { en: 'Sales, purchases and bank', ar: 'المبيعات والمشتريات والبنوك' },
   ledger: { en: 'General ledger', ar: 'الأستاذ العام' },
   periodEnd: { en: 'Period-end', ar: 'نهاية الفترة' },
   assets: { en: 'Fixed assets', ar: 'الأصول الثابتة' },
@@ -123,6 +124,175 @@ export const GUIDES: Guide[] = [
         'استخدم الإجراءات السريعة لإنشاء قيد جديد أو فتح ميزان المراجعة وقائمة الدخل.',
       ],
       tips: ['تعرض القائمة الجانبية فقط الشاشات التي يسمح بها دورك.'],
+    },
+  },
+
+  // ---------------------------------------------------------------- sales, purchases and bank
+  {
+    id: 'parties',
+    section: 'trade',
+    paths: ['/ar/customers', '/ap/suppliers'],
+    en: {
+      title: 'Customers and suppliers',
+      summary: 'The people and companies you sell to and buy from, with their currency, payment terms and current balance.',
+      steps: [
+        'Choose New customer / New supplier and enter a code, names, currency and payment terms (days until an invoice is due).',
+        'Optionally set a default revenue or expense account, which is filled into new invoice lines, plus contact details, tax number and commercial registration.',
+        'The Balance column shows what the customer owes you, or what you owe the supplier. The statement icon opens their statement of account.',
+      ],
+      tips: [
+        'Each customer or supplier uses one currency; their invoices, notes and receipts or payments are in that currency.',
+        'The currency cannot change once documents exist. Make the record inactive instead of deleting it.',
+        'Amounts post to the receivable or payable control account, so manual journals cannot put the ledger out of step with the sub-ledger.',
+      ],
+    },
+    ar: {
+      title: 'العملاء والموردون',
+      summary: 'الجهات التي تبيع لها وتشتري منها، بعملتها ومدة السداد ورصيدها الحالي.',
+      steps: [
+        'اضغط «عميل جديد» أو «مورد جديد» وأدخل الرمز والاسمين والعملة ومدة السداد (عدد الأيام حتى استحقاق الفاتورة).',
+        'يمكنك تحديد حساب إيراد أو مصروف افتراضي يُعبأ تلقائياً في أسطر الفواتير، وبيانات الاتصال والرقم الضريبي والسجل التجاري.',
+        'عمود «الرصيد» يوضح ما يدين به العميل لك أو ما تدين به للمورد، وأيقونة الكشف تفتح كشف حسابه.',
+      ],
+      tips: [
+        'لكل عميل أو مورد عملة واحدة، وتكون فواتيره وإشعاراته وسنداته بهذه العملة.',
+        'لا يمكن تغيير العملة بعد وجود مستندات؛ اجعل السجل غير نشط بدلاً من حذفه.',
+        'تُرحّل المبالغ إلى حساب المراقبة للذمم المدينة أو الدائنة، فلا تؤثر القيود اليدوية على تطابق الدفاتر المساعدة مع الأستاذ العام.',
+      ],
+    },
+  },
+  {
+    id: 'invoices',
+    section: 'trade',
+    paths: ['/ar/invoices', '/ap/invoices'],
+    en: {
+      title: 'Invoices and credit / debit notes',
+      summary: 'All sales or purchase documents with their open balance. Overdue due dates are shown in red.',
+      steps: [
+        'Filter by customer / supplier or status, or search by number or reference.',
+        'Choose New invoice, or New credit note (sales) / New debit note (purchases) for returns and discounts.',
+        'Select a document to view, print, post or void it.',
+      ],
+      tips: ['Open is what remains after receipts, payments and notes have been applied.', 'Numbers are given when a document is posted: SI / CN for sales, PI / DN for purchases.'],
+    },
+    ar: {
+      title: 'الفواتير والإشعارات الدائنة والمدينة',
+      summary: 'جميع مستندات المبيعات أو المشتريات مع الرصيد المتبقي. تظهر تواريخ الاستحقاق المتأخرة باللون الأحمر.',
+      steps: [
+        'صفِّ حسب العميل أو المورد أو الحالة، أو ابحث بالرقم أو المرجع.',
+        'اضغط «فاتورة جديدة»، أو «إشعار دائن جديد» (للمبيعات) أو «إشعار مدين جديد» (للمشتريات) للمرتجعات والخصومات.',
+        'افتح أي مستند لعرضه أو طباعته أو ترحيله أو إلغائه.',
+      ],
+      tips: ['«المتبقي» هو ما يبقى بعد تخصيص التحصيلات أو المدفوعات والإشعارات.', 'يُعطى الرقم عند الترحيل: SI وCN للمبيعات، وPI وDN للمشتريات.'],
+    },
+  },
+  {
+    id: 'invoice-editor',
+    section: 'trade',
+    paths: ['/ar/invoices/', '/ap/invoices/'],
+    en: {
+      title: 'Creating an invoice or note',
+      summary: 'Enter the lines, save as a draft, then post. Posting creates the journal entry on the control account automatically.',
+      steps: [
+        'Choose the customer or supplier, the date and, if needed, a due date (otherwise their payment terms apply).',
+        'Add lines: description, revenue or expense account, cost center, quantity and unit price.',
+        'For a foreign-currency customer or supplier, the exchange rate is taken from Currencies & rates unless you enter one.',
+        'Save draft, then Post. For a credit or debit note you can choose which open invoices it settles.',
+        'Print PDF gives a bilingual document with the amount in words. Void reverses a posted document if nothing has been applied to it.',
+      ],
+      tips: ['Cost center rules and budget control apply to the lines, as in manual journals.', 'To change a posted invoice, void it and enter a new one, or issue a credit / debit note.'],
+    },
+    ar: {
+      title: 'إنشاء فاتورة أو إشعار',
+      summary: 'أدخل الأسطر واحفظ كمسودة ثم رحّل. يُنشئ الترحيل قيد اليومية على حساب المراقبة تلقائياً.',
+      steps: [
+        'اختر العميل أو المورد والتاريخ، وتاريخ الاستحقاق عند الحاجة (وإلا تُطبق مدة السداد الخاصة به).',
+        'أضف الأسطر: البيان وحساب الإيراد أو المصروف ومركز التكلفة والكمية وسعر الوحدة.',
+        'للعميل أو المورد بعملة أجنبية يؤخذ سعر الصرف من شاشة العملات وأسعار الصرف ما لم تُدخل سعراً.',
+        'احفظ كمسودة ثم اضغط «ترحيل». وفي الإشعار الدائن أو المدين يمكنك اختيار الفواتير المفتوحة التي يسويها.',
+        '«طباعة PDF» تنتج مستنداً باللغتين مع المبلغ كتابةً. و«إلغاء» يعكس المستند المرحّل إذا لم يُخصص عليه شيء.',
+      ],
+      tips: ['تُطبق قواعد مراكز التكلفة ورقابة الموازنة على الأسطر كما في القيود اليدوية.', 'لتعديل فاتورة مرحلة ألغِها وأدخل فاتورة جديدة، أو أصدر إشعاراً دائناً أو مديناً.'],
+    },
+  },
+  {
+    id: 'settlements',
+    section: 'trade',
+    paths: ['/ar/receipts', '/ap/payments'],
+    en: {
+      title: 'Receipts and payments',
+      summary: 'Money received from customers or paid to suppliers, applied to their open invoices.',
+      steps: [
+        'Choose New receipt / New payment, then the customer or supplier; a bank account in their currency is selected for you.',
+        'Enter the date and amount. Their open invoices are listed: type the amount for each, or choose Apply oldest first.',
+        'Post. Anything not applied stays on their account as a credit.',
+        'Open a receipt or payment to see what it settled; Void reverses it and reopens the invoices.',
+      ],
+      tips: [
+        'The bank account must be in the same currency as the customer or supplier.',
+        'For foreign currencies, the difference between the invoice rate and today’s rate is posted automatically as a realised exchange gain or loss.',
+      ],
+    },
+    ar: {
+      title: 'سندات القبض والصرف',
+      summary: 'المبالغ المستلمة من العملاء أو المدفوعة للموردين، مخصصة على فواتيرهم المفتوحة.',
+      steps: [
+        'اضغط «سند قبض جديد» أو «سند صرف جديد» ثم اختر العميل أو المورد؛ يُختار تلقائياً حساب بنكي بنفس عملته.',
+        'أدخل التاريخ والمبلغ. تظهر فواتيره المفتوحة: أدخل المبلغ لكل فاتورة أو اضغط «التخصيص للأقدم أولاً».',
+        'اضغط «ترحيل». ويبقى أي مبلغ غير مخصص رصيداً دائناً لصالحه.',
+        'افتح السند لعرض ما سدده؛ و«إلغاء» يعكسه ويعيد فتح الفواتير.',
+      ],
+      tips: ['يجب أن يكون الحساب البنكي بنفس عملة العميل أو المورد.', 'في العملات الأجنبية يُرحّل الفرق بين سعر الفاتورة وسعر السداد تلقائياً كربح أو خسارة فروقات عملة محققة.'],
+    },
+  },
+  {
+    id: 'bank-accounts',
+    section: 'trade',
+    paths: ['/cb/accounts'],
+    en: {
+      title: 'Bank and cash accounts',
+      summary: 'Your bank accounts and cash boxes, each linked to a ledger account, with its balance and the date it was last reconciled.',
+      steps: [
+        'Choose Add: code, names, bank or cash, currency and the ledger account it uses; for banks, the bank name, account number and IBAN.',
+        'Transfer moves money between two accounts. Between different currencies, also enter the amount received.',
+        'Select an account to reconcile it with the bank statement.',
+      ],
+      tips: ['A cash box and a bank current account are created with each new company.', 'Use one ledger account per bank account so its balance and reconciliation stay clear.'],
+    },
+    ar: {
+      title: 'حسابات البنوك والنقدية',
+      summary: 'حساباتك البنكية وصناديق النقدية، كل منها مرتبط بحساب في الأستاذ العام، مع رصيده وتاريخ آخر تسوية.',
+      steps: [
+        'اضغط «إضافة»: الرمز والاسمان والنوع (بنك أو نقدية) والعملة والحساب المرتبط، وللبنوك اسم البنك ورقم الحساب والآيبان.',
+        '«تحويل» ينقل المبالغ بين حسابين. وعند اختلاف العملة أدخل أيضاً المبلغ المستلم.',
+        'افتح الحساب لإجراء التسوية البنكية مع كشف البنك.',
+      ],
+      tips: ['يُنشأ صندوق نقدية وحساب بنكي جاري مع كل شركة جديدة.', 'استخدم حساب أستاذ مستقلاً لكل حساب بنكي ليبقى رصيده وتسويته واضحين.'],
+    },
+  },
+  {
+    id: 'reconciliation',
+    section: 'trade',
+    paths: ['/cb/accounts/'],
+    en: {
+      title: 'Bank reconciliation',
+      summary: 'Match the ledger to the bank statement: tick every movement that appears on the statement until the difference is zero.',
+      steps: [
+        'Choose Start reconciliation and enter the statement date and closing balance.',
+        'Tick each item that is on the statement. The totals at the top update as you tick.',
+        'Save to continue later, or Complete when the difference is zero.',
+      ],
+      tips: ['Items cleared by earlier reconciliations are not shown again.', 'Items not on the statement (cheques not yet presented, deposits in transit) stay unticked and appear next time.'],
+    },
+    ar: {
+      title: 'التسوية البنكية',
+      summary: 'طابق الدفاتر مع كشف البنك: حدد كل حركة ظاهرة في الكشف حتى يصبح الفرق صفراً.',
+      steps: [
+        'اضغط «بدء تسوية» وأدخل تاريخ الكشف ورصيده الختامي.',
+        'حدد كل حركة موجودة في الكشف، وتتحدث الإجماليات في الأعلى أثناء التحديد.',
+        'احفظ للمتابعة لاحقاً، أو اضغط «إتمام التسوية» عندما يصبح الفرق صفراً.',
+      ],
+      tips: ['الحركات التي سُويت سابقاً لا تظهر مرة أخرى.', 'الحركات غير الظاهرة في الكشف (شيكات لم تُصرف أو إيداعات في الطريق) تبقى دون تحديد وتظهر في التسوية التالية.'],
     },
   },
 
@@ -751,7 +921,7 @@ export const GUIDES: Guide[] = [
     en: {
       title: 'Reports',
       summary:
-        'Trial balance, account statement, journal register, income statement, balance sheet, cash flow, cost center analysis and summary, budget vs actual, designed statements, intercompany reconciliation, consolidated reports, and the fixed asset register, PP&E movement schedule and depreciation forecast.',
+        'Receivables and payables ageing, customer and supplier statements, trial balance, account statement, journal register, income statement, balance sheet, cash flow, cost center analysis and summary, budget vs actual, designed statements, intercompany reconciliation, consolidated reports, and the fixed asset register, PP&E movement schedule and depreciation forecast.',
       steps: [
         'Pick the report from Reports in the menu.',
         'Set the filters: periods or dates, account level, cost center, comparison with the prior year, and so on.',
@@ -767,7 +937,7 @@ export const GUIDES: Guide[] = [
     ar: {
       title: 'التقارير',
       summary:
-        'ميزان المراجعة، وكشف الحساب، ودفتر اليومية، وقائمة الدخل، والمركز المالي، والتدفقات النقدية، وتحليل مراكز التكلفة وملخصها، والموازنة مقابل الفعلي، والقوائم المصممة، ومطابقة الحسابات بين الشركات، والتقارير الموحدة، وسجل الأصول الثابتة وجدول حركة الممتلكات والمعدات وتوقعات الاستهلاك.',
+        'أعمار ديون العملاء والموردين، وكشوف حسابات العملاء والموردين، وميزان المراجعة، وكشف الحساب، ودفتر اليومية، وقائمة الدخل، والمركز المالي، والتدفقات النقدية، وتحليل مراكز التكلفة وملخصها، والموازنة مقابل الفعلي، والقوائم المصممة، ومطابقة الحسابات بين الشركات، والتقارير الموحدة، وسجل الأصول الثابتة وجدول حركة الممتلكات والمعدات وتوقعات الاستهلاك.',
       steps: [
         'اختر التقرير من قسم التقارير في القائمة.',
         'حدد الفلاتر: الفترات أو التواريخ، ومستوى الحساب، ومركز التكلفة، والمقارنة بالسنة السابقة وغيرها.',

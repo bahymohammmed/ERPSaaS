@@ -6,12 +6,12 @@ import { useSession } from './session';
 import type { Account, CostCenter, Currency, DimensionType, FiscalYear, JournalType, Period, Template } from './types';
 
 /** Company-scoped query: keyed by company and disabled until a company is selected. */
-export const useCompanyQuery = <T,>(key: readonly unknown[], path: string, query?: Record<string, string | number | boolean | undefined>) => {
+export const useCompanyQuery = <T,>(key: readonly unknown[], path: string, query?: Record<string, string | number | boolean | undefined>, enabled = true) => {
   const { company } = useSession();
   return useQuery({
     queryKey: [company?.id, ...key, query],
     queryFn: () => api<T>(path, { query }),
-    enabled: !!company,
+    enabled: !!company && enabled,
   });
 };
 

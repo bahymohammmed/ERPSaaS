@@ -7,6 +7,8 @@ import { JournalsService } from '../gl/journals.service';
 import { MastersService } from '../gl/masters.service';
 import { AuthService } from '../platform/auth.service';
 import { FixedAssetsService } from '../fa/fixed-assets.service';
+import { BankService } from '../sl/bank.service';
+import { SubledgerService } from '../sl/subledger.service';
 import { DbService } from './db.service';
 
 const EMAIL = process.env.DEMO_EMAIL ?? 'demo@example.com';
@@ -155,6 +157,58 @@ const run = async (): Promise<void> => {
       { a: '5401', d: '3750.000', cc: '102' },
       { a: '210102', c: '3750.000' },
     ]);
+
+    // Customers, suppliers and their documents (sales and purchases are on account).
+    const sl = app.get(SubledgerService);
+    const banks = app.get(BankService);
+    const usdBank = (await banks.saveAccount(ctx, { code: 'USD', name_ar: 'البنك - حساب بالدولار', name_en: 'Bank - USD account', kind: 'BANK', account_id: acc['110104']!, currency_code: 'USD', bank_name: 'NBK', account_number: '2010-445566', iban: null, is_active: true })) as { id: string };
+    const bankList = (await banks.listAccounts(ctx)) as { id: string; code: string }[];
+    const kwdBank = bankList.find((b) => b.code === 'BANK')!.id;
+    const party = async (side: 'AR' | 'AP', p: { code: string; name_ar: string; name_en: string; currency_code?: string; days: number; account: string; phone?: string }) =>
+      ((await sl.saveParty(ctx, side, {
+        code: p.code,
+        name_ar: p.name_ar,
+        name_en: p.name_en,
+        currency_code: p.currency_code ?? 'KWD',
+        payment_terms_days: p.days,
+        default_account_id: acc[p.account]!,
+        phone: p.phone ?? null,
+        is_active: true,
+      })) as { id: string }).id;
+    const c1 = await party('AR', { code: 'C001', name_ar: 'شركة الصفوة للمقاولات', name_en: 'Al Safwa Contracting', days: 30, account: '4102', phone: '+965 2245 1100' });
+    const c2 = await party('AR', { code: 'C002', name_ar: 'مجموعة الراية التجارية', name_en: 'Al Raya Trading Group', days: 45, account: '4101', phone: '+965 2299 3030' });
+    const c3 = await party('AR', { code: 'C003', name_ar: 'فنادق البحر', name_en: 'Al Bahar Hotels', days: 30, account: '4102' });
+    const s1 = await party('AP', { code: 'S001', name_ar: 'شركة المورد الخليجي', name_en: 'Gulf Supplies Co.', days: 30, account: '5101' });
+    const s2 = await party('AP', { code: 'S002', name_ar: 'جلوبال سوفتوير', name_en: 'Global Software Inc.', currency_code: 'USD', days: 15, account: '5305' });
+
+    const invoice = async (side: 'AR' | 'AP', partyId: string, date: string, lines: { d: string; a: string; cc: string; q: string; p: string }[], reference?: string) => {
+      const { id } = await sl.createDocument(ctx, side, {
+        doc_type: 'INVOICE',
+        party_id: partyId,
+        doc_date: date,
+        reference: reference ?? null,
+        lines: lines.map((l) => ({ description: l.d, account_id: acc[l.a]!, cost_center_id: cc[l.cc]!, quantity: l.q, unit_price: l.p })),
+        allocations: [],
+      });
+      await sl.postDocument(ctx, side, id);
+      return id;
+    };
+    const i1 = await invoice('AR', c1, '2026-08-12', [{ d: 'أعمال صيانة المبنى / Building maintenance works', a: '4102', cc: '103', q: '1', p: '4850' }], 'PO-2214');
+    const i2 = await invoice('AR', c2, '2026-09-03', [
+      { d: 'مواد كهربائية / Electrical materials', a: '4101', cc: '102', q: '120', p: '18.750' },
+      { d: 'توصيل / Delivery', a: '4102', cc: '103', q: '1', p: '75' },
+    ], 'RT-889');
+    const i3 = await invoice('AR', c3, '2026-10-05', [{ d: 'عقد صيانة ربع سنوي / Quarterly maintenance contract', a: '4102', cc: '103', q: '1', p: '3600' }]);
+    await invoice('AR', c1, '2026-10-20', [{ d: 'أعمال إضافية / Additional works', a: '4102', cc: '103', q: '1', p: '1275.500' }], 'PO-2290');
+    await sl.createSettlement(ctx, 'AR', { party_id: c1, bank_account_id: kwdBank, settle_date: '2026-09-10', amount: '4850', reference: 'CHQ 556120', allocations: [{ document_id: i1, amount: '4850' }] });
+    await sl.createSettlement(ctx, 'AR', { party_id: c2, bank_account_id: kwdBank, settle_date: '2026-10-15', amount: '1500', reference: 'TRF 99812', allocations: [{ document_id: i2, amount: '1500' }] });
+    void i3;
+
+    const p1 = await invoice('AP', s1, '2026-09-18', [{ d: 'بضاعة / Merchandise', a: '5101', cc: '102', q: '1', p: '2740.250' }], 'GS-7781');
+    await invoice('AP', s1, '2026-10-22', [{ d: 'بضاعة / Merchandise', a: '5101', cc: '102', q: '1', p: '1980' }], 'GS-7840');
+    const p3 = await invoice('AP', s2, '2026-10-01', [{ d: 'تراخيص برمجيات / Software licences', a: '5305', cc: '101', q: '12', p: '45' }], 'INV-55031');
+    await sl.createSettlement(ctx, 'AP', { party_id: s1, bank_account_id: kwdBank, settle_date: '2026-10-05', amount: '2740.250', reference: 'TRF 10023', allocations: [{ document_id: p1, amount: '2740.250' }] });
+    await sl.createSettlement(ctx, 'AP', { party_id: s2, bank_account_id: usdBank.id, settle_date: '2026-10-12', amount: '540', allocations: [{ document_id: p3, amount: '540' }] });
 
     console.log(`Demo tenant ready. Sign in with ${EMAIL} / ${PASSWORD}`);
   } finally {

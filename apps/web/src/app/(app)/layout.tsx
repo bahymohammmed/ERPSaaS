@@ -29,7 +29,13 @@ import {
   IconArrowsSplit,
   IconBook2,
   IconBuilding,
+  IconBuildingBank,
   IconBuildingSkyscraper,
+  IconCash,
+  IconFileDollar,
+  IconReceipt,
+  IconTruck,
+  IconUsersGroup,
   IconBuildingWarehouse,
   IconCategory,
   IconTrendingDown,
@@ -84,6 +90,26 @@ type NavSection = { label: MessageKey; items: NavItem[] };
 const SECTIONS: NavSection[] = [
   { label: 'navOverview', items: [{ href: '/dashboard', label: 'navDashboard', icon: IconLayoutDashboard }] },
   {
+    label: 'navSales',
+    items: [
+      { href: '/ar/invoices', label: 'navSalesInvoices', icon: IconFileDollar, permission: 'ar.view' },
+      { href: '/ar/receipts', label: 'navReceipts', icon: IconReceipt, permission: 'ar.view' },
+      { href: '/ar/customers', label: 'navCustomers', icon: IconUsersGroup, permission: 'ar.view' },
+    ],
+  },
+  {
+    label: 'navPurchases',
+    items: [
+      { href: '/ap/invoices', label: 'navPurchaseInvoices', icon: IconFileInvoice, permission: 'ap.view' },
+      { href: '/ap/payments', label: 'navPayments', icon: IconCash, permission: 'ap.view' },
+      { href: '/ap/suppliers', label: 'navSuppliers', icon: IconTruck, permission: 'ap.view' },
+    ],
+  },
+  {
+    label: 'navBanking',
+    items: [{ href: '/cb/accounts', label: 'navBankAccounts', icon: IconBuildingBank, permission: 'cb.view' }],
+  },
+  {
     label: 'navGl',
     items: [
       { href: '/gl/journals', label: 'navJournals', icon: IconFileInvoice, permission: 'gl.journal.view' },
@@ -136,6 +162,10 @@ const REPORT_ITEMS: { key: string; label: MessageKey }[] = [
   { key: 'cost-center-summary', label: 'reportCostCenterSummary' },
   { key: 'budget-vs-actual', label: 'reportBudgetVsActual' },
   { key: 'statement', label: 'reportStatement' },
+  { key: 'ar-aging', label: 'reportArAging' },
+  { key: 'customer-statement', label: 'reportCustomerStatement' },
+  { key: 'ap-aging', label: 'reportApAging' },
+  { key: 'supplier-statement', label: 'reportSupplierStatement' },
   { key: 'fa-register', label: 'reportFaRegister' },
   { key: 'fa-movement', label: 'reportFaMovement' },
   { key: 'fa-forecast', label: 'reportFaForecast' },
