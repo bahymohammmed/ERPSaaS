@@ -35,6 +35,11 @@ export type DepreciationMethod = (typeof DEPRECIATION_METHODS)[number];
 export const ASSET_STATUSES = ['DRAFT', 'ACTIVE', 'FULLY_DEPRECIATED', 'DISPOSED'] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
+export const LEDGER_SIDES = ['AR', 'AP'] as const;
+export type LedgerSide = (typeof LEDGER_SIDES)[number];
+export const PARTY_DOC_TYPES = ['INVOICE', 'CREDIT_NOTE', 'DEBIT_NOTE'] as const;
+export type PartyDocType = (typeof PARTY_DOC_TYPES)[number];
+
 export const PERIOD_STATUSES = ['OPEN', 'CLOSED', 'LOCKED'] as const;
 export type PeriodStatus = (typeof PERIOD_STATUSES)[number];
 

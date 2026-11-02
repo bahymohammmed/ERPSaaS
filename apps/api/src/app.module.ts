@@ -37,6 +37,10 @@ import { DashboardService } from './gl/dashboard.service';
 import { FaReportsService } from './fa/fa-reports.service';
 import { FixedAssetsController } from './fa/fa.controller';
 import { FixedAssetsService } from './fa/fixed-assets.service';
+import { BankService } from './sl/bank.service';
+import { SlReportsService } from './sl/sl-reports.service';
+import { BankController, SubledgerController } from './sl/sl.controller';
+import { SubledgerService } from './sl/subledger.service';
 import { AuthController } from './platform/auth.controller';
 import { AuthService } from './platform/auth.service';
 import { ProvisioningService } from './platform/provisioning.service';
@@ -54,7 +58,7 @@ class HealthController {
 }
 
 @Module({
-  controllers: [HealthController, AuthController, AdminController, PlatformController, MasterDataController, JournalsController, ReportsController, Phase2Controller, Phase3CompanyController, ConsolidationController, FixedAssetsController],
+  controllers: [HealthController, AuthController, AdminController, PlatformController, MasterDataController, JournalsController, ReportsController, Phase2Controller, Phase3CompanyController, ConsolidationController, FixedAssetsController, SubledgerController, BankController],
   providers: [
     DbService,
     TokenService,
@@ -66,6 +70,9 @@ class HealthController {
     DashboardService,
     FixedAssetsService,
     FaReportsService,
+    SubledgerService,
+    BankService,
+    SlReportsService,
     FiscalService,
     AccountsService,
     CostCentersService,

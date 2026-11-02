@@ -18,6 +18,12 @@ export const PERMISSIONS = [
   'gl.consolidation.manage',
   'fa.view',
   'fa.manage',
+  'ar.view',
+  'ar.manage',
+  'ap.view',
+  'ap.manage',
+  'cb.view',
+  'cb.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -45,17 +51,23 @@ export const SYSTEM_ROLES: Record<SystemRoleCode, { name_ar: string; name_en: st
       'gl.consolidation.manage',
       'fa.view',
       'fa.manage',
+      'ar.view',
+      'ar.manage',
+      'ap.view',
+      'ap.manage',
+      'cb.view',
+      'cb.manage',
       'admin.audit',
     ],
   },
   ACCOUNTANT: {
     name_ar: 'محاسب',
     name_en: 'Accountant',
-    permissions: ['gl.master.view', 'gl.rates.manage', 'gl.journal.view', 'gl.journal.create', 'gl.report.view', 'fa.view', 'fa.manage'],
+    permissions: ['gl.master.view', 'gl.rates.manage', 'gl.journal.view', 'gl.journal.create', 'gl.report.view', 'fa.view', 'fa.manage', 'ar.view', 'ar.manage', 'ap.view', 'ap.manage', 'cb.view', 'cb.manage'],
   },
   VIEWER: {
     name_ar: 'مستعرض',
     name_en: 'Viewer',
-    permissions: ['gl.master.view', 'gl.journal.view', 'gl.report.view', 'fa.view'],
+    permissions: ['gl.master.view', 'gl.journal.view', 'gl.report.view', 'fa.view', 'ar.view', 'ap.view', 'cb.view'],
   },
 };

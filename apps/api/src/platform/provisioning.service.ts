@@ -158,6 +158,16 @@ export class ProvisioningService {
       [companyId, ids.get(TEMPLATE_ROUNDING_ACCOUNT), ids.get(TEMPLATE_RETAINED_EARNINGS_ACCOUNT), ids.get(TEMPLATE_FX_GAIN_ACCOUNT), ids.get(TEMPLATE_FX_LOSS_ACCOUNT)],
     );
     await ensureCompanyDefaults(tx, tenantId, companyId);
+    const base = await tx.one<{ base_currency: string }>('SELECT base_currency FROM core.companies WHERE id = $1', [companyId]);
+    for (const [code, accountCode, kind, nameAr, nameEn] of [
+      ['CASH', '110101', 'CASH', 'الصندوق', 'Cash on hand'],
+      ['BANK', '110103', 'BANK', 'البنك - حساب جاري', 'Bank current account'],
+    ] as const) {
+      await tx.query(
+        'INSERT INTO sl.bank_accounts (tenant_id, company_id, code, name_ar, name_en, kind, account_id, currency_code) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [tenantId, companyId, code, nameAr, nameEn, kind, ids.get(accountCode), base.base_currency],
+      );
+    }
     for (const c of DEFAULT_ASSET_CATEGORIES) {
       await tx.query(
         `INSERT INTO fa.categories (tenant_id, company_id, code, name_ar, name_en, asset_account_id, accum_dep_account_id, dep_expense_account_id,

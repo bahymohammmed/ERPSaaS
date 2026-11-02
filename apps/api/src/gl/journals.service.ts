@@ -193,6 +193,7 @@ export class JournalsService {
       const source = await tx.maybeOne<{ source_module: string }>('SELECT source_module FROM gl.journal_entries WHERE company_id = $1 AND id = $2', [ctx.companyId, id]);
       // The asset register tracks these entries; they are reversed from the fixed asset screens.
       if (source?.source_module === 'FA') throw new AppError('FA_REVERSE_IN_MODULE');
+      if (source?.source_module === 'AR' || source?.source_module === 'AP') throw new AppError('SL_REVERSE_IN_MODULE', { module: source.source_module });
       const reversalId = await this.engine.reverse(tx, ctx, company, id, { date: input.reversal_date, description: input.description });
       await this.intercompany.reverseCounterpart(tx, ctx, id, input.reversal_date);
       return this.load(tx, ctx, reversalId);

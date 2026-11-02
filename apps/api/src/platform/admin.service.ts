@@ -200,6 +200,8 @@ export class AdminService {
         'gl.budgets', 'gl.budget_lines', 'gl.appropriation_rules', 'gl.statements', 'gl.statement_rows',
         'gl.intercompany_partners', 'gl.intercompany_links', 'gl.consolidation_groups', 'gl.consolidation_members', 'gl.consolidation_adjustments',
         'fa.categories', 'fa.assets', 'fa.depreciation_runs', 'fa.depreciation_lines', 'fa.asset_events',
+        'sl.bank_accounts', 'sl.bank_transfers', 'sl.reconciliations', 'sl.reconciliation_items', 'sl.parties', 'sl.documents', 'sl.document_lines',
+        'sl.settlements', 'sl.allocations',
       ];
       const data: Record<string, unknown[]> = {};
       for (const table of tables) data[table] = await tx.query(`SELECT * FROM ${table}`);

@@ -5,6 +5,7 @@ import {
   COST_CENTER_TYPES,
   DEPRECIATION_METHODS,
   DIGIT_STYLES,
+  LEDGER_SIDES,
   DIMENSION_RULES,
   LOCALES,
   MODULES,
@@ -683,8 +684,110 @@ export const costCenterVersionSchema = z
 
 export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
 
+// ---------- Bank, cash, customers and suppliers ----------
+
+export const ledgerSideSchema = z.enum(LEDGER_SIDES);
+
+export const bankAccountSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    kind: z.enum(['BANK', 'CASH']).default('BANK'),
+    account_id: uuidSchema,
+    currency_code: currencyCodeSchema,
+    bank_name: z.string().trim().max(200).nullish(),
+    account_number: z.string().trim().max(60).nullish(),
+    iban: z.string().trim().max(40).nullish(),
+    is_active: z.boolean().default(true),
+  })
+  .refine(requireOneName, nameIssue);
+
+export const bankTransferSchema = z
+  .object({
+    transfer_date: dateSchema,
+    from_account_id: uuidSchema,
+    to_account_id: uuidSchema,
+    amount: amountSchema.refine((v) => Number(v) > 0, { message: 'Amount must be positive' }),
+    /** Amount received, when the two accounts use different currencies. */
+    to_amount: amountSchema.nullish(),
+    reference: z.string().trim().max(100).nullish(),
+    description: z.string().trim().max(500).nullish(),
+  })
+  .refine((v) => v.from_account_id !== v.to_account_id, { message: 'Choose two different accounts', path: ['to_account_id'] });
+
+export const partySchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    currency_code: currencyCodeSchema,
+    control_account_id: uuidSchema.nullish(),
+    default_account_id: uuidSchema.nullish(),
+    payment_terms_days: z.number().int().min(0).max(3650).default(30),
+    credit_limit: amountSchema.nullish(),
+    contact_name: z.string().trim().max(200).nullish(),
+    email: z.string().trim().max(200).nullish(),
+    phone: z.string().trim().max(60).nullish(),
+    address: z.string().trim().max(500).nullish(),
+    tax_no: z.string().trim().max(60).nullish(),
+    commercial_reg_no: z.string().trim().max(60).nullish(),
+    notes: z.string().trim().max(2000).nullish(),
+    is_active: z.boolean().default(true),
+  })
+  .refine(requireOneName, nameIssue);
+export type PartyInput = z.infer<typeof partySchema>;
+
+const allocationInput = z.object({ document_id: uuidSchema, amount: amountSchema.refine((v) => Number(v) > 0, { message: 'Amount must be positive' }) });
+
+export const partyDocumentSchema = z.object({
+  doc_type: z.enum(['INVOICE', 'CREDIT_NOTE', 'DEBIT_NOTE']).default('INVOICE'),
+  party_id: uuidSchema,
+  doc_date: dateSchema,
+  due_date: dateSchema.nullish(),
+  exchange_rate: rateSchema.nullish(),
+  reference: z.string().trim().max(100).nullish(),
+  description: z.string().trim().max(500).nullish(),
+  lines: z
+    .array(
+      z.object({
+        description: z.string().trim().max(500).default(''),
+        account_id: uuidSchema,
+        cost_center_id: uuidSchema.nullish(),
+        quantity: amountSchema.refine((v) => Number(v) > 0, { message: 'Quantity must be positive' }).default('1'),
+        unit_price: amountSchema,
+      }),
+    )
+    .min(1)
+    .max(500),
+  /** Credit / debit notes: open invoices this note settles when posted. */
+  allocations: z.array(allocationInput).max(200).default([]),
+});
+export type PartyDocumentInput = z.infer<typeof partyDocumentSchema>;
+
+export const settlementSchema = z.object({
+  party_id: uuidSchema,
+  bank_account_id: uuidSchema,
+  settle_date: dateSchema,
+  amount: amountSchema.refine((v) => Number(v) > 0, { message: 'Amount must be positive' }),
+  exchange_rate: rateSchema.nullish(),
+  reference: z.string().trim().max(100).nullish(),
+  description: z.string().trim().max(500).nullish(),
+  allocations: z.array(allocationInput).max(500).default([]),
+});
+export type SettlementInput = z.infer<typeof settlementSchema>;
+
+export const voidSchema = z.object({ void_date: dateSchema.nullish() });
+
+export const reconciliationSchema = z.object({ bank_account_id: uuidSchema, statement_date: dateSchema, statement_balance: z.union([z.string(), z.number()]).transform(String).refine((v) => /^-?\d{1,15}(\.\d{1,4})?$/.test(v.trim()), { message: 'Invalid amount' }) });
+export const reconciliationItemsSchema = z.object({ line_ids: z.array(uuidSchema).max(10000) });
+
 // ---------- Fixed asset reports ----------
 
 export const faRegisterQuerySchema = z.object({ as_of: dateSchema, category_id: uuidSchema.optional(), ...reportFormat });
 export const faMovementQuerySchema = z.object({ from: dateSchema, to: dateSchema, ...reportFormat });
 export const faForecastQuerySchema = z.object({ period_id: uuidSchema, months: z.coerce.number().int().min(1).max(24).default(12), ...reportFormat });
+
+// ---------- Receivables / payables reports ----------
+
+export const agingQuerySchema = z.object({ as_of: dateSchema, ...reportFormat });
+export const partyStatementQuerySchema = z.object({ party_id: uuidSchema, from: dateSchema, to: dateSchema, ...reportFormat });
+export const documentPrintQuerySchema = z.object({ ...reportFormat, format: z.enum(['json', 'pdf', 'xlsx']).default('pdf') });
