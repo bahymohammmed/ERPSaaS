@@ -1,0 +1,8 @@
+# HTTPS certificates are obtained and renewed automatically for {$DOMAIN}.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# The only client address the app trusts (see CLIENT_IP_HEADER).
+		header_up X-Real-IP {remote_host}
+	}
+}

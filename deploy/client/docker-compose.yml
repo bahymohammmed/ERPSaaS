@@ -1,0 +1,84 @@
+# Client installation: runs the prebuilt ERP image (no source code needed).
+# Ship this folder only: docker-compose.yml, Caddyfile, db-init.sh, .env.example.
+#
+# 1. copy .env.example to .env and fill in every value (ERP_IMAGE = the image you delivered)
+# 2. Pick how it is published:
+#      docker compose --profile caddy  up -d   (server with a public IP and a domain)
+#      docker compose --profile tunnel up -d   (any machine, through Cloudflare Tunnel)
+
+# Separate project from the development docker-compose.yml, so their databases never mix.
+name: erp
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      ERP_OWNER_PASSWORD: ${ERP_OWNER_PASSWORD:?set ERP_OWNER_PASSWORD in .env}
+      ERP_APP_PASSWORD: ${ERP_APP_PASSWORD:?set ERP_APP_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init.sh:/docker-entrypoint-initdb.d/10-erp-init.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 20
+    # No published port: only the app reaches the database.
+
+  app:
+    image: ${ERP_IMAGE:?set ERP_IMAGE in .env}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://erp_app:${ERP_APP_PASSWORD}@postgres:5432/erp
+      MIGRATION_DATABASE_URL: postgres://erp_owner:${ERP_OWNER_PASSWORD}@postgres:5432/erp
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?set MFA_ENCRYPTION_KEY in .env}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:?set PLATFORM_ADMIN_EMAIL in .env}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?set PLATFORM_ADMIN_PASSWORD in .env}
+      PUBLIC_SIGNUP: ${PUBLIC_SIGNUP:-off}
+      RUN_MIGRATIONS: "true"
+      SEED_DEMO: ${SEED_DEMO:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      # Attachments live in the database, so one database backup covers everything.
+      ATTACHMENT_STORAGE: database
+      COOKIE_SECURE: "true"
+      # Set by the proxy in front (Caddy: x-real-ip, Cloudflare Tunnel: cf-connecting-ip).
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-real-ip}
+    # Only the proxy below talks to the app; nothing is published directly.
+    expose:
+      - "3000"
+
+  # Option A: your own server with ports 80/443 open and a domain pointing at it.
+  caddy:
+    profiles: [caddy]
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Option B: no open ports needed (works from a home PC); Cloudflare provides HTTPS.
+  tunnel:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on: [app]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
