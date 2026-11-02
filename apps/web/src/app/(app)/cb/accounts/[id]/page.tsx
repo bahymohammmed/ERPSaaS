@@ -1,16 +1,16 @@
 'use client';
 
-import { Alert, Anchor, Badge, Button, Card, Checkbox, Group, Modal, Paper, SimpleGrid, Skeleton, Stack, Table, Text, TextInput, Title } from '@mantine/core';
-import { IconCheck, IconPlus, IconTrash } from '@tabler/icons-react';
+import { Alert, Anchor, Badge, Button, Card, Checkbox, FileButton, Group, Modal, Paper, SimpleGrid, Skeleton, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { IconCheck, IconFileImport, IconLink, IconPlus, IconTrash, IconWand, IconX } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Amount, PageHeader } from '@/components/common';
+import { AccountSelect, Amount, CostCenterSelect, PageHeader } from '@/components/common';
 import { notifyError, notifySuccess } from '@/components/notify';
 import { EmptyRow, EmptyState } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
-import { api } from '@/lib/api';
+import { api, upload } from '@/lib/api';
 import { useCompanyQuery } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 
@@ -26,7 +26,9 @@ type State = {
   reconciled_balance: string;
   difference: string;
   lines: { id: string; entry_date: string; entry_no: string; entry_id: string; description: string | null; reference: string | null; amount: string; selected: boolean }[];
+  statement_lines: StatementLine[];
 };
+type StatementLine = { id: string; line_no: number; line_date: string; description: string; reference: string | null; amount: string; matched_line_id: string | null };
 
 const BankAccountPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +47,7 @@ const BankAccountPage = () => {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [start, setStart] = useState<{ statement_date: string; statement_balance: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [booking, setBooking] = useState<{ line: StatementLine; account_id: string | null; cost_center_id: string | null; description: string } | null>(null);
 
   useEffect(() => {
     if (state.data) setTicked(new Set(state.data.lines.filter((l) => l.selected).map((l) => l.id)));
@@ -97,6 +100,48 @@ const BankAccountPage = () => {
       await refresh();
     });
 
+  /** Saves the current ticks first so importing or booking does not lose them. */
+  const withItems = async () => {
+    await api(`/cb/reconciliations/${current}/items`, { method: 'PUT', body: { line_ids: [...ticked] } });
+  };
+
+  const importStatement = (file: File | null) =>
+    run(async () => {
+      if (!file) return;
+      await withItems();
+      const result = await upload<State>(`/cb/reconciliations/${current}/statement`, file);
+      const matched = result.statement_lines.filter((l) => l.matched_line_id).length;
+      notifySuccess(`${t('statementImported')}: ${result.statement_lines.length} · ${t('matched')}: ${matched}`);
+      await refresh();
+    });
+
+  const clearStatement = () =>
+    run(async () => {
+      if (!window.confirm(t('confirmDelete'))) return;
+      await api(`/cb/reconciliations/${current}/statement`, { method: 'DELETE' });
+      await refresh();
+    });
+
+  const rematch = () =>
+    run(async () => {
+      await withItems();
+      await api(`/cb/reconciliations/${current}/match`, { method: 'POST' });
+      await refresh();
+    });
+
+  const book = () =>
+    run(async () => {
+      if (!booking) return;
+      await withItems();
+      await api(`/cb/reconciliations/${current}/statement/${booking.line.id}/post`, {
+        method: 'POST',
+        body: { account_id: booking.account_id, cost_center_id: booking.cost_center_id, description: booking.description || null },
+      });
+      notifySuccess(t('saved'));
+      setBooking(null);
+      await refresh();
+    });
+
   const discard = () =>
     run(async () => {
       if (!window.confirm(t('confirmDelete'))) return;
@@ -108,6 +153,8 @@ const BankAccountPage = () => {
   if (!account) return <Skeleton height={300} radius="lg" />;
   const s = state.data;
   const editable = s?.status === 'DRAFT' && canManage;
+  const matchedLedger = new Set((s?.statement_lines ?? []).map((l) => l.matched_line_id).filter(Boolean));
+  const unmatched = (s?.statement_lines ?? []).filter((l) => !l.matched_line_id).length;
 
   return (
     <Stack>
@@ -146,6 +193,13 @@ const BankAccountPage = () => {
             </Title>
             {editable && (
               <Group gap="xs">
+                <FileButton onChange={importStatement} accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                  {(props) => (
+                    <Button {...props} variant="light" size="xs" leftSection={<IconFileImport size={14} />} loading={busy}>
+                      {t('importStatement')}
+                    </Button>
+                  )}
+                </FileButton>
                 <Button variant="subtle" color="red" size="xs" leftSection={<IconTrash size={14} />} onClick={discard} loading={busy}>
                   {t('delete')}
                 </Button>
@@ -214,10 +268,83 @@ const BankAccountPage = () => {
                         </Anchor>
                       </Table.Td>
                       <Table.Td>
-                        <Text size="sm" lineClamp={1}>{l.description}</Text>
+                        <Group gap={6} wrap="nowrap">
+                          {matchedLedger.has(l.id) && (
+                            <Tooltip label={t('matchedToStatement')}>
+                              <IconLink size={14} color="var(--mantine-color-teal-6)" />
+                            </Tooltip>
+                          )}
+                          <Text size="sm" lineClamp={1}>{l.description}</Text>
+                        </Group>
                       </Table.Td>
                       <Table.Td className="amount-cell">{amount > 0 && <Amount value={l.amount} minor={minor} />}</Table.Td>
                       <Table.Td className="amount-cell">{amount < 0 && <Amount value={String(-amount)} minor={minor} />}</Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
+
+      {s && s.statement_lines.length > 0 && (
+        <Paper withBorder p="md" className="page-enter">
+          <Group justify="space-between" mb="sm" wrap="wrap">
+            <Title order={5}>
+              {t('bankStatement')}{' '}
+              <Badge variant="light" color={unmatched ? 'yellow' : 'teal'} ml="xs">
+                {unmatched ? `${unmatched} ${t('unmatched')}` : t('allMatched')}
+              </Badge>
+            </Title>
+            {editable && (
+              <Group gap="xs">
+                <Button variant="default" size="xs" leftSection={<IconWand size={14} />} onClick={rematch} loading={busy} disabled={!unmatched}>
+                  {t('autoMatch')}
+                </Button>
+                <Button variant="subtle" color="red" size="xs" leftSection={<IconX size={14} />} onClick={clearStatement} loading={busy}>
+                  {t('clearStatement')}
+                </Button>
+              </Group>
+            )}
+          </Group>
+          <Table.ScrollContainer minWidth={700}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('date')}</Table.Th>
+                  <Table.Th>{t('description')}</Table.Th>
+                  <Table.Th>{t('reference')}</Table.Th>
+                  <Table.Th style={{ textAlign: 'end' }}>{t('moneyIn')}</Table.Th>
+                  <Table.Th style={{ textAlign: 'end' }}>{t('moneyOut')}</Table.Th>
+                  <Table.Th style={{ width: 150 }} />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {s.statement_lines.map((l) => {
+                  const amount = Number(l.amount);
+                  return (
+                    <Table.Tr key={l.id}>
+                      <Table.Td className="num">{l.line_date}</Table.Td>
+                      <Table.Td>
+                        <Text size="sm" lineClamp={1}>{l.description}</Text>
+                      </Table.Td>
+                      <Table.Td className="ltr">{l.reference}</Table.Td>
+                      <Table.Td className="amount-cell">{amount > 0 && <Amount value={l.amount} minor={minor} />}</Table.Td>
+                      <Table.Td className="amount-cell">{amount < 0 && <Amount value={String(-amount)} minor={minor} />}</Table.Td>
+                      <Table.Td>
+                        {l.matched_line_id ? (
+                          <Badge variant="light" color="teal" leftSection={<IconCheck size={12} />}>
+                            {t('matched')}
+                          </Badge>
+                        ) : (
+                          editable && (
+                            <Button size="compact-xs" variant="light" onClick={() => setBooking({ line: l, account_id: null, cost_center_id: null, description: l.description })}>
+                              {t('bookLine')}
+                            </Button>
+                          )
+                        )}
+                      </Table.Td>
                     </Table.Tr>
                   );
                 })}
@@ -260,6 +387,25 @@ const BankAccountPage = () => {
           </Table>
         )}
       </Paper>
+
+      <Modal opened={!!booking} onClose={() => setBooking(null)} title={t('bookLine')}>
+        {booking && (
+          <Stack>
+            <Text size="sm" className="num">
+              {booking.line.line_date} · <Amount value={booking.line.amount} minor={minor} /> {account.currency_code}
+            </Text>
+            <Alert variant="light">{t('bookLineHint')}</Alert>
+            <AccountSelect label={t('account')} value={booking.account_id} onChange={(v) => setBooking({ ...booking, account_id: v })} />
+            <CostCenterSelect label={t('costCenter')} value={booking.cost_center_id} onChange={(v) => setBooking({ ...booking, cost_center_id: v })} />
+            <TextInput label={t('description')} value={booking.description} onChange={(e) => setBooking({ ...booking, description: e.currentTarget.value })} />
+            <Group justify="flex-end">
+              <Button onClick={book} loading={busy} disabled={!booking.account_id}>
+                {t('postDocument')}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
 
       <Modal opened={!!start} onClose={() => setStart(null)} title={t('newReconciliation')}>
         {start && (

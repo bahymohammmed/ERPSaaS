@@ -195,24 +195,26 @@ export const GUIDES: Guide[] = [
       summary: 'Enter the lines, save as a draft, then post. Posting creates the journal entry on the control account automatically.',
       steps: [
         'Choose the customer or supplier, the date and, if needed, a due date (otherwise their payment terms apply).',
-        'Add lines: description, revenue or expense account, cost center, quantity and unit price.',
+        'Add lines: description, revenue or expense account, cost center, quantity and unit price, and a tax code if tax applies. Subtotal, tax and total update as you type.',
         'For a foreign-currency customer or supplier, the exchange rate is taken from Currencies & rates unless you enter one.',
         'Save draft, then Post. For a credit or debit note you can choose which open invoices it settles.',
         'Print PDF gives a bilingual document with the amount in words. Void reverses a posted document if nothing has been applied to it.',
+        'A posted note with an open amount shows Apply to invoices. Applied receipts and notes are listed at the bottom; the undo icon takes one back off on a date you choose.',
       ],
-      tips: ['Cost center rules and budget control apply to the lines, as in manual journals.', 'To change a posted invoice, void it and enter a new one, or issue a credit / debit note.'],
+      tips: ['Tax goes to the tax code’s sales account on sales and its purchase account on purchases.', 'Cost center rules and budget control apply to the lines, as in manual journals.', 'To change a posted invoice, void it and enter a new one, or issue a credit / debit note.'],
     },
     ar: {
       title: 'إنشاء فاتورة أو إشعار',
       summary: 'أدخل الأسطر واحفظ كمسودة ثم رحّل. يُنشئ الترحيل قيد اليومية على حساب المراقبة تلقائياً.',
       steps: [
         'اختر العميل أو المورد والتاريخ، وتاريخ الاستحقاق عند الحاجة (وإلا تُطبق مدة السداد الخاصة به).',
-        'أضف الأسطر: البيان وحساب الإيراد أو المصروف ومركز التكلفة والكمية وسعر الوحدة.',
+        'أضف الأسطر: البيان وحساب الإيراد أو المصروف ومركز التكلفة والكمية وسعر الوحدة، ورمز الضريبة إن وُجدت. يتحدث المجموع والضريبة والإجمالي أثناء الكتابة.',
         'للعميل أو المورد بعملة أجنبية يؤخذ سعر الصرف من شاشة العملات وأسعار الصرف ما لم تُدخل سعراً.',
         'احفظ كمسودة ثم اضغط «ترحيل». وفي الإشعار الدائن أو المدين يمكنك اختيار الفواتير المفتوحة التي يسويها.',
         '«طباعة PDF» تنتج مستنداً باللغتين مع المبلغ كتابةً. و«إلغاء» يعكس المستند المرحّل إذا لم يُخصص عليه شيء.',
+        'الإشعار المرحّل الذي له رصيد متبقٍ يظهر فيه زر «تخصيص على الفواتير». وتظهر التخصيصات في الأسفل، وأيقونة التراجع تلغي أي تخصيص بتاريخ تختاره.',
       ],
-      tips: ['تُطبق قواعد مراكز التكلفة ورقابة الموازنة على الأسطر كما في القيود اليدوية.', 'لتعديل فاتورة مرحلة ألغِها وأدخل فاتورة جديدة، أو أصدر إشعاراً دائناً أو مديناً.'],
+      tips: ['تُرحّل الضريبة إلى حساب ضريبة المبيعات لرمز الضريبة في المبيعات، وإلى حساب ضريبة المشتريات في المشتريات.', 'تُطبق قواعد مراكز التكلفة ورقابة الموازنة على الأسطر كما في القيود اليدوية.', 'لتعديل فاتورة مرحلة ألغِها وأدخل فاتورة جديدة، أو أصدر إشعاراً دائناً أو مديناً.'],
     },
   },
   {
@@ -226,10 +228,11 @@ export const GUIDES: Guide[] = [
         'Choose New receipt / New payment, then the customer or supplier; a bank account in their currency is selected for you.',
         'Enter the date and amount. Their open invoices are listed: type the amount for each, or choose Apply oldest first.',
         'Post. Anything not applied stays on their account as a credit.',
-        'Open a receipt or payment to see what it settled; Void reverses it and reopens the invoices.',
+        'Open a receipt or payment to see what it settled. If part is unapplied, Apply to invoices settles more invoices later; the undo icon removes an allocation. Void reverses it and reopens the invoices.',
       ],
       tips: [
-        'The bank account must be in the same currency as the customer or supplier.',
+        'Paid through an account in another currency (a USD supplier from a KWD account)? Also enter the bank amount: what actually left or reached the bank fixes the rate.',
+        'Applying later realises the exchange difference on the allocation date; removing or voiding undoes it.',
         'For foreign currencies, the difference between the invoice rate and today’s rate is posted automatically as a realised exchange gain or loss.',
       ],
     },
@@ -240,9 +243,9 @@ export const GUIDES: Guide[] = [
         'اضغط «سند قبض جديد» أو «سند صرف جديد» ثم اختر العميل أو المورد؛ يُختار تلقائياً حساب بنكي بنفس عملته.',
         'أدخل التاريخ والمبلغ. تظهر فواتيره المفتوحة: أدخل المبلغ لكل فاتورة أو اضغط «التخصيص للأقدم أولاً».',
         'اضغط «ترحيل». ويبقى أي مبلغ غير مخصص رصيداً دائناً لصالحه.',
-        'افتح السند لعرض ما سدده؛ و«إلغاء» يعكسه ويعيد فتح الفواتير.',
+        'افتح السند لعرض ما سدده. إن بقي جزء غير مخصص فزر «تخصيص على الفواتير» يسوي فواتير أخرى لاحقاً، وأيقونة التراجع تلغي أي تخصيص. و«إلغاء» يعكس السند ويعيد فتح الفواتير.',
       ],
-      tips: ['يجب أن يكون الحساب البنكي بنفس عملة العميل أو المورد.', 'في العملات الأجنبية يُرحّل الفرق بين سعر الفاتورة وسعر السداد تلقائياً كربح أو خسارة فروقات عملة محققة.'],
+      tips: ['عند السداد من حساب بعملة أخرى (مورد بالدولار من حساب بالدينار) أدخل أيضاً مبلغ البنك: ما خرج من البنك أو دخله فعلاً يحدد سعر الصرف.', 'التخصيص اللاحق يحقق فرق العملة بتاريخ التخصيص، وإلغاء التخصيص أو السند يعكسه.', 'في العملات الأجنبية يُرحّل الفرق بين سعر الفاتورة وسعر السداد تلقائياً كربح أو خسارة فروقات عملة محققة.'],
     },
   },
   {
@@ -279,20 +282,50 @@ export const GUIDES: Guide[] = [
       summary: 'Match the ledger to the bank statement: tick every movement that appears on the statement until the difference is zero.',
       steps: [
         'Choose Start reconciliation and enter the statement date and closing balance.',
-        'Tick each item that is on the statement. The totals at the top update as you tick.',
+        'Import statement (CSV or Excel from your bank) matches each statement line to a ledger movement of the same amount within five days and ticks it.',
+        'For statement lines with no ledger entry (bank charges, interest), choose Book, pick the account, and it is posted and ticked.',
+        'Tick any remaining items that are on the statement. The totals at the top update as you tick.',
         'Save to continue later, or Complete when the difference is zero.',
       ],
-      tips: ['Items cleared by earlier reconciliations are not shown again.', 'Items not on the statement (cheques not yet presented, deposits in transit) stay unticked and appear next time.'],
+      tips: ['The file needs a date column and either an amount column (negative = money out) or separate debit / credit (withdrawal / deposit) columns; Arabic headers work too.', 'Items cleared by earlier reconciliations are not shown again.', 'Items not on the statement (cheques not yet presented, deposits in transit) stay unticked and appear next time.'],
     },
     ar: {
       title: 'التسوية البنكية',
       summary: 'طابق الدفاتر مع كشف البنك: حدد كل حركة ظاهرة في الكشف حتى يصبح الفرق صفراً.',
       steps: [
         'اضغط «بدء تسوية» وأدخل تاريخ الكشف ورصيده الختامي.',
-        'حدد كل حركة موجودة في الكشف، وتتحدث الإجماليات في الأعلى أثناء التحديد.',
+        '«استيراد كشف» (CSV أو Excel من البنك) يطابق كل سطر في الكشف مع حركة في الدفاتر بنفس المبلغ خلال خمسة أيام ويحددها.',
+        'لأسطر الكشف التي ليس لها قيد (عمولات بنكية، فوائد) اضغط «تسجيل» واختر الحساب، فيُرحّل القيد ويُحدد.',
+        'حدد أي حركة متبقية موجودة في الكشف، وتتحدث الإجماليات في الأعلى أثناء التحديد.',
         'احفظ للمتابعة لاحقاً، أو اضغط «إتمام التسوية» عندما يصبح الفرق صفراً.',
       ],
-      tips: ['الحركات التي سُويت سابقاً لا تظهر مرة أخرى.', 'الحركات غير الظاهرة في الكشف (شيكات لم تُصرف أو إيداعات في الطريق) تبقى دون تحديد وتظهر في التسوية التالية.'],
+      tips: ['يحتاج الملف عمود تاريخ، وعمود مبلغ (السالب = سحب) أو عمودي مدين ودائن (سحب وإيداع)؛ والعناوين العربية مقبولة.', 'الحركات التي سُويت سابقاً لا تظهر مرة أخرى.', 'الحركات غير الظاهرة في الكشف (شيكات لم تُصرف أو إيداعات في الطريق) تبقى دون تحديد وتظهر في التسوية التالية.'],
+    },
+  },
+
+  {
+    id: 'tax-codes',
+    section: 'trade',
+    paths: ['/gl/tax-codes'],
+    en: {
+      title: 'Tax codes',
+      summary: 'Rates applied to invoice lines, such as VAT or a zero rate, with the accounts their tax posts to.',
+      steps: [
+        'Choose Add: code, names and rate in percent.',
+        'Sales tax account: where tax on sales invoices is credited (a liability). Purchase tax account: where recoverable tax on purchases is debited (an asset).',
+        'Pick the code on invoice lines. Reports → Tax report totals net amounts and tax per code for any date range.',
+      ],
+      tips: ['A code used on documents cannot be deleted; deactivate it instead.', 'Changing a rate affects new and re-saved drafts only; posted documents keep their tax.'],
+    },
+    ar: {
+      title: 'رموز الضريبة',
+      summary: 'النسب التي تُطبق على أسطر الفواتير، مثل ضريبة القيمة المضافة أو النسبة الصفرية، مع الحسابات التي تُرحّل إليها.',
+      steps: [
+        'اضغط «إضافة»: الرمز والاسمان والنسبة المئوية.',
+        'حساب ضريبة المبيعات: يُقيد فيه دائناً ضريبة فواتير المبيعات (التزام). حساب ضريبة المشتريات: يُقيد فيه مديناً الضريبة القابلة للاسترداد (أصل).',
+        'اختر الرمز في أسطر الفواتير. و«التقارير ← تقرير الضريبة» يجمع الصافي والضريبة لكل رمز لأي فترة.',
+      ],
+      tips: ['لا يمكن حذف رمز مستخدم في مستندات؛ أوقفه بدلاً من ذلك.', 'تغيير النسبة يؤثر على المسودات الجديدة أو المحفوظة مجدداً فقط؛ المستندات المرحّلة تحتفظ بضريبتها.'],
     },
   },
 
@@ -921,7 +954,7 @@ export const GUIDES: Guide[] = [
     en: {
       title: 'Reports',
       summary:
-        'Receivables and payables ageing, customer and supplier statements, trial balance, account statement, journal register, income statement, balance sheet, cash flow, cost center analysis and summary, budget vs actual, designed statements, intercompany reconciliation, consolidated reports, and the fixed asset register, PP&E movement schedule and depreciation forecast.',
+        'Receivables and payables ageing, customer and supplier statements, tax report, trial balance, account statement, journal register, income statement, balance sheet, cash flow, cost center analysis and summary, budget vs actual, designed statements, intercompany reconciliation, consolidated reports, and the fixed asset register, PP&E movement schedule and depreciation forecast.',
       steps: [
         'Pick the report from Reports in the menu.',
         'Set the filters: periods or dates, account level, cost center, comparison with the prior year, and so on.',
@@ -937,7 +970,7 @@ export const GUIDES: Guide[] = [
     ar: {
       title: 'التقارير',
       summary:
-        'أعمار ديون العملاء والموردين، وكشوف حسابات العملاء والموردين، وميزان المراجعة، وكشف الحساب، ودفتر اليومية، وقائمة الدخل، والمركز المالي، والتدفقات النقدية، وتحليل مراكز التكلفة وملخصها، والموازنة مقابل الفعلي، والقوائم المصممة، ومطابقة الحسابات بين الشركات، والتقارير الموحدة، وسجل الأصول الثابتة وجدول حركة الممتلكات والمعدات وتوقعات الاستهلاك.',
+        'أعمار ديون العملاء والموردين، وكشوف حسابات العملاء والموردين، وتقرير الضريبة، وميزان المراجعة، وكشف الحساب، ودفتر اليومية، وقائمة الدخل، والمركز المالي، والتدفقات النقدية، وتحليل مراكز التكلفة وملخصها، والموازنة مقابل الفعلي، والقوائم المصممة، ومطابقة الحسابات بين الشركات، والتقارير الموحدة، وسجل الأصول الثابتة وجدول حركة الممتلكات والمعدات وتوقعات الاستهلاك.',
       steps: [
         'اختر التقرير من قسم التقارير في القائمة.',
         'حدد الفلاتر: الفترات أو التواريخ، ومستوى الحساب، ومركز التكلفة، والمقارنة بالسنة السابقة وغيرها.',

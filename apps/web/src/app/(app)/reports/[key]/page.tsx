@@ -37,6 +37,7 @@ const REPORTS: Record<string, ReportDef> = {
   'ap-aging': { title: 'reportApAging', fields: ['asOf'], required: ['as_of'], path: () => '/sl/AP/reports/aging' },
   'customer-statement': { title: 'reportCustomerStatement', fields: ['customer', 'dateRange'], required: ['party_id', 'from', 'to'], path: () => '/sl/AR/reports/statement' },
   'supplier-statement': { title: 'reportSupplierStatement', fields: ['supplier', 'dateRange'], required: ['party_id', 'from', 'to'], path: () => '/sl/AP/reports/statement' },
+  'tax-report': { title: 'reportTax', fields: ['dateRange'], required: ['from', 'to'], path: () => '/tax/report' },
   'fa-register': { title: 'reportFaRegister', fields: ['asOf'], required: ['as_of'], path: () => '/fa/reports/register' },
   'fa-movement': { title: 'reportFaMovement', fields: ['dateRange'], required: ['from', 'to'], path: () => '/fa/reports/movement' },
   'fa-forecast': { title: 'reportFaForecast', fields: ['period', 'months'], required: ['period_id'], path: () => '/fa/reports/forecast' },

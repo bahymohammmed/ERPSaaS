@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { useCompanyQuery } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { AllocationTable, type AllocationMap, toAllocations } from './AllocationTable';
+import { ApplyButton, RemoveAllocationButton } from './ApplyLater';
 import { type BankAccount, type Party, SIDE_UI } from './config';
 
 type Detail = {
@@ -32,9 +33,13 @@ type Detail = {
   reference: string | null;
   description: string | null;
   status: 'POSTED' | 'VOID';
+  party_id: string;
+  bank_currency: string;
+  bank_amount: string | null;
+  unallocated: string;
   entry_id: string | null;
   entry_no: string | null;
-  allocations: { id: string; amount: string; fx_difference: string; is_active: boolean; document_id: string; doc_no: string; doc_date: string }[];
+  allocations: { id: string; amount: string; fx_difference: string; is_active: boolean; alloc_date: string; removed_on: string | null; document_id: string; doc_no: string; doc_date: string }[];
 };
 
 export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string }) => {
@@ -48,12 +53,14 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
   const { data: parties = [] } = useCompanyQuery<Party[]>(['sl-parties', side], `/sl/${side}/parties`);
   const { data: banks = [] } = useCompanyQuery<BankAccount[]>(['cb-accounts'], '/cb/accounts');
   const detail = useQuery({ queryKey: [company?.id, 'sl-settlement', id], queryFn: () => api<Detail>(`/sl/${side}/settlements/${id}`), enabled: !!company && !isNew });
-  const [form, setForm] = useState({ party_id: null as string | null, bank_account_id: null as string | null, settle_date: new Date().toISOString().slice(0, 10), amount: '', exchange_rate: '', reference: '', description: '' });
+  const [form, setForm] = useState({ party_id: null as string | null, bank_account_id: null as string | null, settle_date: new Date().toISOString().slice(0, 10), amount: '', bank_amount: '', exchange_rate: '', reference: '', description: '' });
   const [allocations, setAllocations] = useState<AllocationMap>({});
   const [busy, setBusy] = useState(false);
   const party = parties.find((p) => p.id === form.party_id);
   const foreign = !!party && party.currency_code !== company?.base_currency;
-  const bankOptions = banks.filter((b) => b.is_active && (!party || b.currency_code === party.currency_code));
+  const bankOptions = banks.filter((b) => b.is_active);
+  const bank = banks.find((b) => b.id === form.bank_account_id);
+  const crossCurrency = !!party && !!bank && bank.currency_code !== party.currency_code;
 
   const refresh = () => queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === company?.id && (String(q.queryKey[1]).startsWith('sl-') || String(q.queryKey[1]).startsWith('cb-')) });
 
@@ -62,7 +69,7 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
     try {
       const result = await api<{ id: string; doc_no: string }>(`/sl/${side}/settlements`, {
         method: 'POST',
-        body: { ...form, exchange_rate: foreign && form.exchange_rate ? form.exchange_rate : null, reference: form.reference || null, description: form.description || null, allocations: toAllocations(allocations) },
+        body: { ...form, bank_amount: crossCurrency ? form.bank_amount : null, exchange_rate: foreign && !crossCurrency && form.exchange_rate ? form.exchange_rate : null, reference: form.reference || null, description: form.description || null, allocations: toAllocations(allocations) },
       });
       notifySuccess(`${t('saved')}: ${result.doc_no}`);
       await refresh();
@@ -103,9 +110,12 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
           actions={
             can(ui.manage) &&
             s.status === 'POSTED' && (
-              <Button color="red" variant="light" leftSection={<IconBan size={16} />} onClick={voidIt} loading={busy}>
-                {t('voidDocument')}
-              </Button>
+              <>
+                {Number(s.unallocated) > 0 && <ApplyButton side={side} partyId={s.party_id} sourceType="SETTLEMENT" sourceId={s.id} open={Number(s.unallocated)} minor={minor} onDone={refresh} />}
+                <Button color="red" variant="light" leftSection={<IconBan size={16} />} onClick={voidIt} loading={busy}>
+                  {t('voidDocument')}
+                </Button>
+              </>
             )
           }
         />
@@ -128,6 +138,15 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
               <Text fw={700} className="num">
                 <Amount value={s.amount} minor={minor} /> {s.currency_code}
               </Text>
+              {s.bank_amount && (
+                <Text size="xs" c="dimmed" className="num">
+                  {t('bankAmount')}: <Amount value={s.bank_amount} minor={minor} /> {s.bank_currency}
+                </Text>
+              )}
+            </div>
+            <div>
+              <Text size="xs" c="dimmed">{t('unallocated')}</Text>
+              <Text className="num"><Amount value={s.unallocated} minor={minor} /></Text>
             </div>
             <div>
               <Text size="xs" c="dimmed">{t('reference')}</Text>
@@ -145,6 +164,7 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
             </div>
           </SimpleGrid>
         </Paper>
+        {s.allocations.length > 0 && (
         <Paper withBorder p="md">
           <Text fw={600} mb="xs">{t('appliedDocuments')}</Text>
           <Table>
@@ -156,16 +176,24 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
                       {a.doc_no}
                     </Anchor>
                   </Table.Td>
-                  <Table.Td className="num">{a.doc_date}</Table.Td>
+                  <Table.Td className="num">{a.alloc_date}</Table.Td>
                   <Table.Td className="amount-cell">
                     <Amount value={a.amount} minor={minor} />
                   </Table.Td>
                   <Table.Td className="amount-cell">{Number(a.fx_difference) !== 0 && <Text size="xs" c="dimmed">{t('fxDifference')}: <Amount value={a.fx_difference} minor={minor} /></Text>}</Table.Td>
+                  <Table.Td>
+                    {a.is_active ? (
+                      can(ui.manage) && s.status === 'POSTED' && <RemoveAllocationButton side={side} allocationId={a.id} onDone={refresh} />
+                    ) : (
+                      <Text size="xs" c="dimmed">{a.removed_on ? `${t('unallocated')} ${a.removed_on}` : t('docStatusVOID')}</Text>
+                    )}
+                  </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
           </Table>
         </Paper>
+        )}
       </Stack>
     );
   }
@@ -175,7 +203,7 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
       <PageHeader
         title={t(ui.newSettlement)}
         actions={
-          <Button leftSection={<IconCheck size={16} />} onClick={save} loading={busy} disabled={!form.party_id || !form.bank_account_id || !(Number(form.amount) > 0)}>
+          <Button leftSection={<IconCheck size={16} />} onClick={save} loading={busy} disabled={!form.party_id || !form.bank_account_id || !(Number(form.amount) > 0) || (crossCurrency && !(Number(form.bank_amount) > 0))}>
             {t('postDocument')}
           </Button>
         }
@@ -200,7 +228,18 @@ export const SettlementEditor = ({ side, id }: { side: LedgerSide; id: string })
           <TextInput type="date" label={t('date')} required value={form.settle_date} onChange={(e) => setForm({ ...form, settle_date: e.currentTarget.value })} />
           <TextInput label={`${t('amount')}${party ? ` (${party.currency_code})` : ''}`} required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.currentTarget.value })} classNames={{ input: 'num' }} inputMode="decimal" />
           <TextInput label={t('reference')} value={form.reference} onChange={(e) => setForm({ ...form, reference: e.currentTarget.value })} />
-          {foreign ? (
+          {crossCurrency && (
+            <TextInput
+              label={`${t('bankAmount')} (${bank?.currency_code})`}
+              description={t('bankAmountHint')}
+              required
+              value={form.bank_amount}
+              onChange={(e) => setForm({ ...form, bank_amount: e.currentTarget.value })}
+              classNames={{ input: 'num' }}
+              inputMode="decimal"
+            />
+          )}
+          {foreign && !crossCurrency ? (
             <TextInput label={t('exchangeRate')} value={form.exchange_rate} onChange={(e) => setForm({ ...form, exchange_rate: e.currentTarget.value })} classNames={{ input: 'num' }} placeholder="SPOT" />
           ) : (
             <TextInput label={t('description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} />

@@ -189,9 +189,12 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
 ### Sales, purchases and bank (AR / AP / cash)
 - **Customers and suppliers** with currency, payment terms, credit limit, contact and tax details, a default revenue / expense account, and a running balance. Each posts to a receivable or payable **control account**, so the sub-ledger always agrees with the ledger.
 - **Invoices** (sales and purchase) and **credit / debit notes**: lines with account, cost center, quantity and unit price; draft → post (gapless SI / CN / PI / DN numbers) → void by reversal. Cost center rules and budget control apply. Bilingual PDF with the amount in words.
+- **Tax codes** (rate, sales and purchase tax accounts) per invoice line; tax is posted to its own accounts and shown on the printed document. The **tax report** totals net amounts, output and input tax per code for any date range.
 - **Receipts and payments** applied to open invoices (manually or oldest first); the unapplied rest stays on account. Foreign-currency documents carry their rate, and the difference between invoice and settlement rates is posted as a **realised exchange gain or loss**.
+- A receipt or payment can go through a bank account in **another currency** (a USD supplier paid from a KWD account): the bank amount fixes the rate.
+- **Later allocation**: on-account receipts, payments and credit / debit notes can be applied to invoices after posting, and allocations removed again; the exchange difference is realised on the allocation date and undone on removal or void. Ageing follows allocation dates.
 - **Bank and cash accounts** linked to ledger accounts, with balances in their own currency; **transfers** between them, also across currencies.
-- **Bank reconciliation**: tick the lines on the statement until the difference is zero; cleared lines drop out of later reconciliations.
+- **Bank reconciliation**: tick the lines on the statement until the difference is zero; cleared lines drop out of later reconciliations. **Statement import** (CSV or Excel, English or Arabic headers, signed amount or debit / credit columns) matches lines to ledger movements of the same amount within five days; unmatched lines such as bank charges are booked from the statement in one step.
 - **Reports**: receivables and payables ageing (checked against the control accounts) and customer / supplier statements of account.
 
 ### Fixed assets (IAS 16)
@@ -266,18 +269,18 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 | Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary,budget-vs-actual,statement}`, `GET gl/reports/voucher/:id`, with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
 | Group | `gl/intercompany/{partners,transactions}`, `GET gl/reports/{cash-flow,intercompany-reconciliation}`, `gl/cost-center-versions`, `consolidation/groups` (+ `/:id/adjustments`, `/:id/{worksheet,balance-sheet,income-statement}`) |
 | Platform | `GET platform/me`, `platform/tenants` (list, create), `GET/PATCH platform/tenants/:id`, `POST platform/tenants/:id/users/:userId/reset-credentials`, `POST platform/mfa/{setup,enable,disable}`; `GET auth/config` (public) |
-| Sales / purchases | `sl/{AR,AP}/parties`, `sl/{AR,AP}/documents` (+ `/:id/{post,void,print}`), `sl/{AR,AP}/settlements` (+ `/:id/void`), `GET sl/{AR,AP}/reports/{aging,statement}` |
-| Bank and cash | `cb/accounts`, `cb/transfers`, `cb/accounts/:id/reconciliations`, `cb/reconciliations` (+ `/:id/items`, `/:id/complete`) |
+| Sales / purchases | `sl/{AR,AP}/parties`, `sl/{AR,AP}/documents` (+ `/:id/{post,void,print}`), `sl/{AR,AP}/settlements` (+ `/:id/void`), `POST sl/{AR,AP}/allocations`, `POST sl/{AR,AP}/allocations/:id/remove`, `GET sl/{AR,AP}/reports/{aging,statement}` |
+| Tax | `tax/codes`, `GET tax/report` |
+| Bank and cash | `cb/accounts`, `cb/transfers`, `cb/accounts/:id/reconciliations`, `cb/reconciliations` (+ `/:id/items`, `/:id/complete`, `/:id/statement` upload / delete, `/:id/match`, `/:id/statement/:lineId/post`) |
 | Fixed assets | `fa/categories`, `fa/assets` (+ `/:id/{activate,transfer,dispose,reverse-disposal}`), `fa/depreciation/{preview,run,runs}`, `POST fa/depreciation/runs/:id/reverse`, `fa/import` (+ `/template`), `GET fa/reports/{register,movement,forecast}` |
 | Security | `POST auth/mfa/{setup,enable,disable}`, `POST admin/users/:id/mfa-reset`, `GET admin/export` |
 | Period-end | `gl/recurring` (+ `/:id/run`), `POST gl/fx-revaluation[/preview]`, `gl/allocation/{drivers,rules,runs}`, `POST gl/allocation/preview`, `gl/budgets` (+ `/lines`, `/generate`, `/status`), `gl/year-end/{rules,close,reopen}`, `GET gl/year-end/:fiscalYearId/preview`, `gl/statements`, `gl/import/{accounts,journals}`, `GET gl/import/templates/:kind` |
 
 ## Not yet built
 
-- Tax codes (VAT / GST) on invoices.
 - Inventory items, stock movements and costing; payroll.
-- Applying an on-account receipt or credit later (allocation happens when the receipt, payment or note is posted); receipts in a currency other than the customer's.
-- Bank statement import (CSV / MT940) and bank feeds.
+- MT940 / CAMT statement formats and live bank feeds (CSV and Excel import only).
+- Tax-inclusive prices and per-jurisdiction tax return forms (the tax report is a summary by code).
 - OIDC/SSO.
 - Email delivery of invitations (a temporary password is shown once to the administrator).
 - Object storage for attachments (local disk, or the database with `ATTACHMENT_STORAGE=database`).
