@@ -112,7 +112,7 @@ describe('suppliers in a foreign currency', () => {
     const usdBank = ok(await f.api.post('/cb/accounts', { code: 'USD', name_en: 'USD account', kind: 'BANK', account_id: f.accounts['110104'], currency_code: 'USD' })).id;
     const supplier = ok(await f.api.post('/sl/AP/parties', { code: 'S001', name_en: 'Global Software Inc.', currency_code: 'USD', payment_terms_days: 15 })).id;
 
-    expect((await f.api.post('/sl/AP/settlements', { party_id: supplier, bank_account_id: banks.BANK, settle_date: '2026-03-05', amount: '10' })).body.error.code).toBe('SL_CURRENCY_MISMATCH');
+    expect((await f.api.post('/sl/AP/settlements', { party_id: supplier, bank_account_id: banks.BANK, settle_date: '2026-03-05', amount: '10' })).body.error.code).toBe('SL_BANK_AMOUNT_REQUIRED');
 
     const bill = ok(await f.api.post('/sl/AP/documents', { party_id: supplier, doc_date: '2026-02-01', lines: [{ description: 'Licences', account_id: f.accounts['5305'], cost_center_id: f.costCenters['101'], unit_price: '1000' }] })).id;
     expect(ok(await f.api.post(`/sl/AP/documents/${bill}/post`, {}), 200).doc_no).toBe('PI-2026-00001');

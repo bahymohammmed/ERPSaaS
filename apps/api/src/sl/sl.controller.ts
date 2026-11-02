@@ -1,6 +1,12 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   agingQuerySchema,
+  allocateSchema,
+  statementPostSchema,
+  taxCodeSchema,
+  taxReportQuerySchema,
+  unallocateSchema,
   bankAccountSchema,
   bankTransferSchema,
   type DigitStyle,
@@ -20,6 +26,7 @@ import {
 } from '@erp/shared';
 import type { Response } from 'express';
 import { z } from 'zod';
+import { AppError } from '../common/app-error';
 import { CompanyCtx, CompanyScoped, RequirePermissions } from '../common/decorators';
 import { assertPermission, type CompanyContext } from '../common/request-context';
 import { parse } from '../common/zod.pipe';
@@ -27,6 +34,7 @@ import { ExportService } from '../gl/export/export.service';
 import { BankService } from './bank.service';
 import { SlReportsService } from './sl-reports.service';
 import { SubledgerService } from './subledger.service';
+import { TaxService } from './tax.service';
 
 type Format = { format: 'json' | 'pdf' | 'xlsx'; lang: ReportLanguage; digits: DigitStyle };
 
@@ -145,6 +153,19 @@ export class SubledgerController {
     return this.sl.voidSettlement(ctx, this.side(ctx, side, 'manage'), id, parse(voidSchema, body ?? {}).void_date);
   }
 
+  /** Applies an already-posted receipt / payment or note to open invoices. */
+  @Post('allocations')
+  @HttpCode(200)
+  allocate(@CompanyCtx() ctx: CompanyContext, @Param('side') side: string, @Body() body: unknown) {
+    return this.sl.allocate(ctx, this.side(ctx, side, 'manage'), parse(allocateSchema, body));
+  }
+
+  @Post('allocations/:id/remove')
+  @HttpCode(200)
+  unallocate(@CompanyCtx() ctx: CompanyContext, @Param('side') side: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    return this.sl.unallocate(ctx, this.side(ctx, side, 'manage'), id, parse(unallocateSchema, body ?? {}).date);
+  }
+
   @Get('reports/aging')
   async aging(@CompanyCtx() ctx: CompanyContext, @Param('side') side: string, @Query() query: unknown, @Res() res: Response) {
     const q = parse(agingQuerySchema, query);
@@ -221,9 +242,78 @@ export class BankController {
     return this.bank.complete(ctx, id);
   }
 
+  @Post('reconciliations/:id/statement')
+  @HttpCode(200)
+  @RequirePermissions('cb.manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  importStatement(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: { buffer: Buffer } | undefined) {
+    if (!file) throw new AppError('VALIDATION_FAILED', {}, [{ path: 'file', message: 'File is required' }]);
+    return this.bank.importStatement(ctx, id, file.buffer);
+  }
+
+  @Delete('reconciliations/:id/statement')
+  @RequirePermissions('cb.manage')
+  clearStatement(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string) {
+    return this.bank.clearStatement(ctx, id);
+  }
+
+  @Post('reconciliations/:id/match')
+  @HttpCode(200)
+  @RequirePermissions('cb.manage')
+  matchStatement(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string) {
+    return this.bank.matchStatement(ctx, id);
+  }
+
+  @Post('reconciliations/:id/statement/:lineId/post')
+  @HttpCode(200)
+  @RequirePermissions('cb.manage', 'gl.journal.post')
+  postStatementLine(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string, @Param('lineId', ParseUUIDPipe) lineId: string, @Body() body: unknown) {
+    return this.bank.postStatementLine(ctx, id, lineId, parse(statementPostSchema, body));
+  }
+
   @Delete('reconciliations/:id')
   @RequirePermissions('cb.manage')
   remove(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string) {
     return this.bank.deleteReconciliation(ctx, id);
+  }
+}
+
+@Controller('tax')
+@CompanyScoped()
+export class TaxController {
+  constructor(
+    private readonly tax: TaxService,
+    private readonly exporter: ExportService,
+  ) {}
+
+  @Get('codes')
+  @RequirePermissions('gl.master.view')
+  codes(@CompanyCtx() ctx: CompanyContext) {
+    return this.tax.list(ctx);
+  }
+
+  @Post('codes')
+  @RequirePermissions('gl.master.manage')
+  create(@CompanyCtx() ctx: CompanyContext, @Body() body: unknown) {
+    return this.tax.save(ctx, parse(taxCodeSchema, body));
+  }
+
+  @Put('codes/:id')
+  @RequirePermissions('gl.master.manage')
+  update(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    return this.tax.save(ctx, parse(taxCodeSchema, body), id);
+  }
+
+  @Delete('codes/:id')
+  @RequirePermissions('gl.master.manage')
+  remove(@CompanyCtx() ctx: CompanyContext, @Param('id', ParseUUIDPipe) id: string) {
+    return this.tax.remove(ctx, id);
+  }
+
+  @Get('report')
+  @RequirePermissions('gl.report.view')
+  async report(@CompanyCtx() ctx: CompanyContext, @Query() query: unknown, @Res() res: Response) {
+    const q = parse(taxReportQuerySchema, query);
+    await sendReport(this.exporter, res, q, await this.tax.report(ctx, q));
   }
 }

@@ -14,6 +14,9 @@ const BUCKETS = [
   { key: 'older', label: t('أكثر من 90 يوماً', 'Over 90 days'), min: 91, max: Infinity },
 ] as const;
 
+/** SQL: the allocation was in place on the report date ($3). */
+const ALLOC_AS_OF = `al.alloc_date <= $3 AND (al.is_active OR al.removed_on > $3)`;
+
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
 /** Ageing, party statements and printable documents for the customer and supplier ledgers. */
@@ -35,17 +38,16 @@ export class SlReportsService {
       const invoices = await tx.query<{ party_id: string; due_date: string; open: string; rate: string }>(
         `SELECT d.party_id, d.due_date, d.exchange_rate AS rate,
                 d.total - COALESCE((SELECT sum(al.amount) FROM sl.allocations al
-                   LEFT JOIN sl.settlements s ON s.id = al.settlement_id LEFT JOIN sl.documents n ON n.id = al.source_document_id
-                   WHERE al.target_document_id = d.id AND al.is_active AND COALESCE(s.settle_date, n.doc_date) <= $3), 0) AS open
+                   WHERE al.target_document_id = d.id AND ${ALLOC_AS_OF}), 0) AS open
          FROM sl.documents d
          WHERE d.company_id = $1 AND d.side = $2 AND d.doc_type = 'INVOICE' AND d.status = 'POSTED' AND d.doc_date <= $3`,
         [ctx.companyId, side, q.as_of],
       );
       const unapplied = await tx.query<{ party_id: string; amount: string }>(
-        `SELECT n.party_id, (n.total - COALESCE((SELECT sum(al.amount) FROM sl.allocations al WHERE al.source_document_id = n.id AND al.is_active), 0)) * n.exchange_rate AS amount
+        `SELECT n.party_id, (n.total - COALESCE((SELECT sum(al.amount) FROM sl.allocations al WHERE al.source_document_id = n.id AND ${ALLOC_AS_OF}), 0)) * n.exchange_rate AS amount
          FROM sl.documents n WHERE n.company_id = $1 AND n.side = $2 AND n.doc_type <> 'INVOICE' AND n.status = 'POSTED' AND n.doc_date <= $3
          UNION ALL
-         SELECT s.party_id, (s.amount - COALESCE((SELECT sum(al.amount) FROM sl.allocations al WHERE al.settlement_id = s.id AND al.is_active), 0)) * s.exchange_rate
+         SELECT s.party_id, (s.amount - COALESCE((SELECT sum(al.amount) FROM sl.allocations al WHERE al.settlement_id = s.id AND ${ALLOC_AS_OF}), 0)) * s.exchange_rate
          FROM sl.settlements s WHERE s.company_id = $1 AND s.side = $2 AND s.status = 'POSTED' AND s.settle_date <= $3`,
         [ctx.companyId, side, q.as_of],
       );
@@ -174,8 +176,8 @@ export class SlReportsService {
   printDocument(ctx: CompanyContext, side: LedgerSide, id: string) {
     return this.db.withTenant(ctx, async (tx) => {
       const company = await this.reports.company(tx, ctx.companyId);
-      const doc = await tx.maybeOne<{ doc_type: string; doc_no: string | null; doc_date: string; due_date: string; reference: string | null; description: string | null; total: string; status: string; currency_code: string; party_code: string; party_name_ar: string; party_name_en: string; tax_no: string | null; address: string | null }>(
-        `SELECT d.doc_type, d.doc_no, d.doc_date, d.due_date, d.reference, d.description, d.total, d.status, d.currency_code,
+      const doc = await tx.maybeOne<{ doc_type: string; doc_no: string | null; doc_date: string; due_date: string; reference: string | null; description: string | null; total: string; subtotal: string; tax_total: string; status: string; currency_code: string; party_code: string; party_name_ar: string; party_name_en: string; tax_no: string | null; address: string | null }>(
+        `SELECT d.doc_type, d.doc_no, d.doc_date, d.due_date, d.reference, d.description, d.total, d.subtotal, d.tax_total, d.status, d.currency_code,
                 p.code AS party_code, p.name_ar AS party_name_ar, p.name_en AS party_name_en, p.tax_no, p.address
          FROM sl.documents d JOIN sl.parties p ON p.id = d.party_id WHERE d.company_id = $1 AND d.side = $2 AND d.id = $3`,
         [ctx.companyId, side, id],
@@ -183,8 +185,8 @@ export class SlReportsService {
       if (!doc) throw notFound('document');
       const currency = await tx.one<WordsCurrency>('SELECT minor_units, name_ar, name_en, minor_name_ar, minor_name_en FROM core.currencies WHERE code = $1', [doc.currency_code]);
       const minor = currency.minor_units;
-      const lines = await tx.query<{ description: string; quantity: string; unit_price: string; amount: string }>(
-        'SELECT description, quantity, unit_price, amount FROM sl.document_lines WHERE document_id = $1 ORDER BY line_no',
+      const lines = await tx.query<{ description: string; quantity: string; unit_price: string; amount: string; tax_rate: string; tax_amount: string }>(
+        'SELECT description, quantity, unit_price, amount, tax_rate, tax_amount FROM sl.document_lines WHERE document_id = $1 ORDER BY line_no',
         [id],
       );
       const columns: ReportColumn[] = [
@@ -194,9 +196,24 @@ export class SlReportsService {
         { key: 'price', label: t('السعر', 'Unit price'), kind: 'amount', minorUnits: minor },
         { key: 'amount', label: t('المبلغ', 'Amount'), kind: 'amount', minorUnits: minor },
       ];
+      const taxed = !toMoney(doc.tax_total).isZero();
+      if (taxed) {
+        columns.push({ key: 'taxRate', label: t('الضريبة %', 'Tax %'), kind: 'rate' }, { key: 'tax', label: t('الضريبة', 'Tax'), kind: 'amount', minorUnits: minor });
+      }
       const rows: ReportRow[] = lines.map((l, i) => ({
-        cells: { no: String(i + 1), description: l.description, quantity: String(Number(l.quantity)), price: toMoney(l.unit_price).toFixed(minor), amount: toMoney(l.amount).toFixed(minor) },
+        cells: {
+          no: String(i + 1),
+          description: l.description,
+          quantity: String(Number(l.quantity)),
+          price: toMoney(l.unit_price).toFixed(minor),
+          amount: toMoney(l.amount).toFixed(minor),
+          ...(taxed ? { taxRate: toMoney(l.tax_rate).isZero() ? '' : String(Number(l.tax_rate)), tax: toMoney(l.tax_amount).toFixed(minor) } : {}),
+        },
       }));
+      if (taxed) {
+        rows.push({ cells: { description: 'المجموع قبل الضريبة / Subtotal', amount: toMoney(doc.subtotal).toFixed(minor) }, style: 'subtotal' });
+        rows.push({ cells: { description: 'الضريبة / Tax', amount: toMoney(doc.tax_total).toFixed(minor) }, style: 'subtotal' });
+      }
       rows.push({ cells: { description: `الإجمالي / Total (${doc.currency_code})`, amount: toMoney(doc.total).toFixed(minor) }, style: 'grandTotal' });
       const titles: Record<string, BilingualText> = {
         'AR:INVOICE': t('فاتورة', 'Invoice'),

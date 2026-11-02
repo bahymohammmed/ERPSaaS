@@ -754,6 +754,7 @@ export const partyDocumentSchema = z.object({
         cost_center_id: uuidSchema.nullish(),
         quantity: amountSchema.refine((v) => Number(v) > 0, { message: 'Quantity must be positive' }).default('1'),
         unit_price: amountSchema,
+        tax_code_id: uuidSchema.nullish(),
       }),
     )
     .min(1)
@@ -769,11 +770,43 @@ export const settlementSchema = z.object({
   settle_date: dateSchema,
   amount: amountSchema.refine((v) => Number(v) > 0, { message: 'Amount must be positive' }),
   exchange_rate: rateSchema.nullish(),
+  /** Amount in the bank account's currency when it differs from the party's currency. */
+  bank_amount: amountSchema.nullish(),
   reference: z.string().trim().max(100).nullish(),
   description: z.string().trim().max(500).nullish(),
   allocations: z.array(allocationInput).max(500).default([]),
 });
 export type SettlementInput = z.infer<typeof settlementSchema>;
+
+export const taxCodeSchema = z
+  .object({
+    code: codeSchema,
+    ...bilingualNames,
+    rate: amountSchema.refine((v) => Number(v) <= 100, { message: 'At most 100' }),
+    sales_account_id: uuidSchema.nullish(),
+    purchase_account_id: uuidSchema.nullish(),
+    is_active: z.boolean().default(true),
+  })
+  .refine(requireOneName, nameIssue);
+
+/** Applies an already-posted receipt / payment or credit / debit note to open invoices. */
+export const allocateSchema = z.object({
+  source_type: z.enum(['SETTLEMENT', 'DOCUMENT']),
+  source_id: uuidSchema,
+  date: dateSchema.nullish(),
+  allocations: z.array(allocationInput).min(1).max(500),
+});
+
+export type AllocateInput = z.infer<typeof allocateSchema>;
+export type TaxCodeInput = z.infer<typeof taxCodeSchema>;
+
+export const unallocateSchema = z.object({ date: dateSchema.nullish() });
+
+export const statementPostSchema = z.object({
+  account_id: uuidSchema,
+  cost_center_id: uuidSchema.nullish(),
+  description: z.string().trim().max(500).nullish(),
+});
 
 export const voidSchema = z.object({ void_date: dateSchema.nullish() });
 
@@ -791,3 +824,4 @@ export const faForecastQuerySchema = z.object({ period_id: uuidSchema, months: z
 export const agingQuerySchema = z.object({ as_of: dateSchema, ...reportFormat });
 export const partyStatementQuerySchema = z.object({ party_id: uuidSchema, from: dateSchema, to: dateSchema, ...reportFormat });
 export const documentPrintQuerySchema = z.object({ ...reportFormat, format: z.enum(['json', 'pdf', 'xlsx']).default('pdf') });
+export const taxReportQuerySchema = z.object({ from: dateSchema, to: dateSchema, ...reportFormat });

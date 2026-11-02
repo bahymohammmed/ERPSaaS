@@ -8,6 +8,7 @@ import type { CompanyContext } from '../common/request-context';
 import { DbService, type Tx } from '../db/db.service';
 import { findRate } from '../gl/masters.service';
 import { loadCompany } from '../gl/posting.engine';
+import { parseStatement } from './statement-parser';
 import { type SlLine, SubledgerService } from './subledger.service';
 
 type BankAccount = { id: string; code: string; account_id: string; currency_code: string; is_active: boolean };
@@ -154,12 +155,9 @@ export class BankService {
     return this.db.withTenant(ctx, async (tx) => {
       const state = await this.reconciliationState(tx, ctx, id);
       if (state.status !== 'DRAFT') throw new AppError('VALIDATION_FAILED', {}, [{ path: 'status', message: 'The reconciliation is completed' }]);
-      const allowed = new Set(state.lines.map((l) => l.id));
-      await tx.query('DELETE FROM sl.reconciliation_items WHERE reconciliation_id = $1', [id]);
-      for (const lineId of new Set(lineIds)) {
-        if (!allowed.has(lineId)) continue;
-        await tx.query('INSERT INTO sl.reconciliation_items (tenant_id, company_id, reconciliation_id, line_id) VALUES ($1, $2, $3, $4)', [ctx.tenantId, ctx.companyId, id, lineId]);
-      }
+      await this.writeItems(tx, ctx, id, state.lines.map((l) => l.id), lineIds);
+      // A statement line stays matched only while its ledger line is ticked.
+      await tx.query('UPDATE sl.statement_lines SET matched_line_id = NULL WHERE reconciliation_id = $1 AND NOT (matched_line_id = ANY($2::uuid[]))', [id, lineIds]);
       return this.reconciliationState(tx, ctx, id);
     });
   }
@@ -183,6 +181,136 @@ export class BankService {
       await tx.query('DELETE FROM sl.reconciliations WHERE id = $1', [id]);
       return { deleted: true };
     });
+  }
+
+  // ---------------------------------------------------------------- imported statements
+
+  /**
+   * Loads a bank statement (CSV or Excel) into a draft reconciliation, replacing any earlier
+   * import, then matches its lines to ledger lines and ticks them.
+   */
+  importStatement(ctx: CompanyContext, id: string, file: Buffer) {
+    return this.db.withTenant(ctx, async (tx) => {
+      await this.draft(tx, ctx, id);
+      const lines = await parseStatement(file);
+      await tx.query('DELETE FROM sl.statement_lines WHERE reconciliation_id = $1', [id]);
+      for (const l of lines) {
+        await tx.query(
+          `INSERT INTO sl.statement_lines (tenant_id, company_id, reconciliation_id, line_no, line_date, description, reference, amount)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [ctx.tenantId, ctx.companyId, id, l.line_no, l.date, l.description, l.reference, l.amount],
+        );
+      }
+      await this.autoMatch(tx, ctx, id);
+      await this.audit.record(tx, ctx, { action: 'import', entityType: 'bank_statement', entityId: id, companyId: ctx.companyId, newData: { lines: lines.length } });
+      return this.reconciliationState(tx, ctx, id);
+    });
+  }
+
+  clearStatement(ctx: CompanyContext, id: string) {
+    return this.db.withTenant(ctx, async (tx) => {
+      await this.draft(tx, ctx, id);
+      await tx.query('DELETE FROM sl.statement_lines WHERE reconciliation_id = $1', [id]);
+      return this.reconciliationState(tx, ctx, id);
+    });
+  }
+
+  matchStatement(ctx: CompanyContext, id: string) {
+    return this.db.withTenant(ctx, async (tx) => {
+      await this.draft(tx, ctx, id);
+      await this.autoMatch(tx, ctx, id);
+      return this.reconciliationState(tx, ctx, id);
+    });
+  }
+
+  /**
+   * Books a statement line that has no ledger entry yet (bank charges, interest, transfers in)
+   * against the given account, then matches and ticks it.
+   */
+  postStatementLine(ctx: CompanyContext, id: string, lineId: string, input: { account_id: string; cost_center_id?: string | null; description?: string | null }) {
+    return this.db.withTenant(ctx, async (tx) => {
+      const rec = await this.draft(tx, ctx, id);
+      const line = await tx.maybeOne<{ id: string; line_date: string; description: string; reference: string | null; amount: string; matched_line_id: string | null }>(
+        'SELECT id, line_date, description, reference, amount, matched_line_id FROM sl.statement_lines WHERE reconciliation_id = $1 AND id = $2 FOR UPDATE',
+        [id, lineId],
+      );
+      if (!line) throw notFound('statement line');
+      if (line.matched_line_id) throw new AppError('SL_STATEMENT_LINE_MATCHED');
+      if (line.line_date > rec.statement_date) throw new AppError('VALIDATION_FAILED', {}, [{ path: 'line_date', message: `After the statement date ${rec.statement_date}` }]);
+      const company = await loadCompany(tx, ctx.companyId);
+      const bank = await this.account(tx, ctx, rec.bank_account_id);
+      const rate = bank.currency_code === company.base_currency ? '1' : await findRate(tx, ctx.companyId, bank.currency_code, line.line_date);
+      const amount = toMoney(line.amount);
+      const value = amount.abs();
+      const base = roundToMinor(value.times(rate), company.base_minor_units);
+      const moneyIn = amount.isPositive();
+      const description = (input.description || line.description || line.reference || 'Bank statement').slice(0, 500);
+      const zero = new Money(0);
+      const side = (accountId: string, costCenter: string | null, debit: boolean): SlLine => ({
+        account_id: accountId,
+        cost_center_id: costCenter,
+        description,
+        currency_code: bank.currency_code,
+        exchange_rate: rate,
+        debit: debit ? value : zero,
+        credit: debit ? zero : value,
+        debit_base: debit ? base : zero,
+        credit_base: debit ? zero : base,
+      });
+      const entryId = await this.subledger.postEntry(tx, ctx, company, 'GL', line.line_date, 'BANK_STATEMENT', line.id, description,
+        [side(bank.account_id, null, moneyIn), side(input.account_id, input.cost_center_id ?? null, !moneyIn)], 'BNK');
+      if (line.reference) await tx.query('UPDATE gl.journal_entries SET reference = $2 WHERE id = $1', [entryId, line.reference.slice(0, 100)]);
+      const bankLine = await tx.one<{ id: string }>('SELECT id FROM gl.journal_lines WHERE entry_id = $1 AND account_id = $2 ORDER BY line_no LIMIT 1', [entryId, bank.account_id]);
+      await tx.query('UPDATE sl.statement_lines SET matched_line_id = $2 WHERE id = $1', [line.id, bankLine.id]);
+      await tx.query('INSERT INTO sl.reconciliation_items (tenant_id, company_id, reconciliation_id, line_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING', [ctx.tenantId, ctx.companyId, id, bankLine.id]);
+      await this.audit.record(tx, ctx, { action: 'post', entityType: 'bank_statement_line', entityId: line.id, companyId: ctx.companyId, newData: input });
+      return this.reconciliationState(tx, ctx, id);
+    });
+  }
+
+  /**
+   * Pairs each unmatched statement line with an unmatched ledger line of the same signed amount
+   * dated within five days, nearest date first, and ticks the matched ledger lines.
+   */
+  private async autoMatch(tx: Tx, ctx: CompanyContext, id: string) {
+    const state = await this.reconciliationState(tx, ctx, id);
+    const statement = await tx.query<{ id: string; line_date: string; amount: string; matched_line_id: string | null }>(
+      'SELECT id, line_date, amount, matched_line_id FROM sl.statement_lines WHERE reconciliation_id = $1 ORDER BY line_date, line_no',
+      [id],
+    );
+    const used = new Set(statement.map((s) => s.matched_line_id).filter((x): x is string => !!x));
+    const days = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+    const ticked = new Set(state.lines.filter((l) => l.selected).map((l) => l.id));
+    for (const s of statement.filter((x) => !x.matched_line_id)) {
+      const amount = toMoney(s.amount);
+      const candidate = state.lines
+        .filter((l) => !used.has(l.id) && toMoney(l.amount).eq(amount) && days(l.entry_date, s.line_date) <= 5)
+        .sort((a, b) => days(a.entry_date, s.line_date) - days(b.entry_date, s.line_date))[0];
+      if (!candidate) continue;
+      used.add(candidate.id);
+      ticked.add(candidate.id);
+      await tx.query('UPDATE sl.statement_lines SET matched_line_id = $2 WHERE id = $1', [s.id, candidate.id]);
+    }
+    await this.writeItems(tx, ctx, id, state.lines.map((l) => l.id), [...ticked]);
+  }
+
+  private async writeItems(tx: Tx, ctx: CompanyContext, id: string, allowedIds: string[], lineIds: string[]) {
+    const allowed = new Set(allowedIds);
+    await tx.query('DELETE FROM sl.reconciliation_items WHERE reconciliation_id = $1', [id]);
+    for (const lineId of new Set(lineIds)) {
+      if (!allowed.has(lineId)) continue;
+      await tx.query('INSERT INTO sl.reconciliation_items (tenant_id, company_id, reconciliation_id, line_id) VALUES ($1, $2, $3, $4)', [ctx.tenantId, ctx.companyId, id, lineId]);
+    }
+  }
+
+  private async draft(tx: Tx, ctx: CompanyContext, id: string) {
+    const rec = await tx.maybeOne<{ id: string; status: string; bank_account_id: string; statement_date: string }>(
+      'SELECT id, status, bank_account_id, statement_date FROM sl.reconciliations WHERE company_id = $1 AND id = $2 FOR UPDATE',
+      [ctx.companyId, id],
+    );
+    if (!rec) throw notFound('reconciliation');
+    if (rec.status !== 'DRAFT') throw new AppError('VALIDATION_FAILED', {}, [{ path: 'status', message: 'The reconciliation is completed' }]);
+    return rec;
   }
 
   private async reconciliationState(tx: Tx, ctx: CompanyContext, id: string) {
@@ -210,6 +338,10 @@ export class BankService {
        ORDER BY e.entry_date, e.entry_no`,
       [ctx.companyId, id, bank.account_id, rec.statement_date, bank.currency_code],
     );
+    const statementLines = await tx.query<{ id: string; line_no: number; line_date: string; description: string; reference: string | null; amount: string; matched_line_id: string | null }>(
+      'SELECT id, line_no, line_date, description, reference, amount, matched_line_id FROM sl.statement_lines WHERE reconciliation_id = $1 ORDER BY line_no',
+      [id],
+    );
     const selected = sumAmounts(lines.filter((l) => l.selected).map((l) => l.amount));
     const reconciled = toMoney(cleared.total).plus(selected);
     return {
@@ -220,6 +352,7 @@ export class BankService {
       reconciled_balance: toStorage(reconciled),
       difference: toStorage(toMoney(rec.statement_balance).minus(reconciled)),
       lines,
+      statement_lines: statementLines,
     };
   }
 
