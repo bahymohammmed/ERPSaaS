@@ -1,6 +1,6 @@
 'use client';
 
-import type { Permission } from '@erp/shared';
+import { featureForReport, featureForScreen, type FeatureKey, type Permission } from '@erp/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/i18n/i18n';
@@ -14,6 +14,11 @@ type Session = {
   company: Me['companies'][number] | undefined;
   selectCompany: (id: string) => void;
   can: (permission: Permission) => boolean;
+  /** The module is in the tenant's subscription plan. */
+  has: (feature: FeatureKey) => boolean;
+  /** The screen (route) belongs to a module in the plan, or to no module. */
+  screenOpen: (pathname: string) => boolean;
+  reportOpen: (key: string) => boolean;
   refresh: () => Promise<void>;
 };
 
@@ -79,6 +84,16 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       company,
       selectCompany,
       can: (permission) => !!me?.permissions.includes(permission),
+      has: (feature) => !!me?.features?.includes(feature),
+      screenOpen: (pathname) => {
+        const report = /^\/reports\/([^/]+)/.exec(pathname);
+        const feature = report ? featureForReport(report[1] ?? '') : featureForScreen(pathname);
+        return !feature || !!me?.features?.includes(feature);
+      },
+      reportOpen: (key) => {
+        const feature = featureForReport(key);
+        return !feature || !!me?.features?.includes(feature);
+      },
       refresh: async () => {
         await queryClient.invalidateQueries();
       },

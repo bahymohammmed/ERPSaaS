@@ -1,6 +1,6 @@
-# ERP — General Ledger module
+# Diwan · ديوان
 
-Multi-tenant SaaS ERP. This first module is the General Ledger. It is built for Kuwait: KWD with 3 decimals, IFRS chart of accounts, and Arabic/English throughout.
+Multi-tenant SaaS ERP for Kuwait and the Gulf: general ledger, sales and receivables, purchases and payables, bank and cash, tax and fixed assets, with group consolidation. KWD with 3 decimals, IFRS chart of accounts, and Arabic/English throughout. The product name lives in `packages/shared/src/brand.ts`.
 
 | Layer | Technology |
 |---|---|
@@ -186,6 +186,13 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
 - Every platform action on a tenant is written to that tenant's audit log. Cross-tenant reads go through `SECURITY DEFINER` functions that re-check the caller.
 - `PUBLIC_SIGNUP=off` closes self-service sign-up, so tenants are created only from the console. Docker Compose and Cloudflare default to `off`.
 
+### Subscription plans
+- The console's **Subscription plans** tab creates, edits and deletes plans: names, description, monthly price, default company and user limits, and the **modules** included.
+- Modules (`packages/shared/src/features.ts`) bundle related screens, reports and API routes, so they open and close together: general ledger (always included), period-end, budgets, statement designer, tax, bank and cash, sales and receivables, purchases and payables, fixed assets, group companies.
+- Dependencies are kept consistent: ticking sales or purchases also ticks bank and cash; unticking bank and cash also unticks sales and purchases. The server stores a plan with everything it requires.
+- Each tenant is on one plan. Requests to a module outside it are refused with `FEATURE_NOT_IN_PLAN`, and its screens disappear from the menu, reports list and search; data already entered is kept and returns when the plan includes the module again.
+- Seeded plans: Starter, Business, Enterprise and Standard (every module; the default, and the plan existing tenants are on). The default plan is used for self-service sign-up and for tenants created without a plan. Plans in use and the default plan cannot be deleted.
+
 ### Sales, purchases and bank (AR / AP / cash)
 - **Customers and suppliers** with currency, payment terms, credit limit, contact and tax details, a default revenue / expense account, and a running balance. Each posts to a receivable or payable **control account**, so the sub-ledger always agrees with the ledger.
 - **Invoices** (sales and purchase) and **credit / debit notes**: lines with account, cost center, quantity and unit price; draft → post (gapless SI / CN / PI / DN numbers) → void by reversal. Cost center rules and budget control apply. Bilingual PDF with the amount in words.
@@ -268,7 +275,7 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 | Journals | `gl/journals` CRUD, `POST gl/journals/:id/{submit,approve,reject,post,reverse}`, attachments, `GET gl/journals/:id/audit`, `POST gl/postings` |
 | Reports | `GET gl/reports/{trial-balance,ledger,journal-register,income-statement,balance-sheet,cost-center-matrix,cost-center-summary,budget-vs-actual,statement}`, `GET gl/reports/voucher/:id`, with `format=json\|pdf\|xlsx`, `lang=ar\|en\|both` |
 | Group | `gl/intercompany/{partners,transactions}`, `GET gl/reports/{cash-flow,intercompany-reconciliation}`, `gl/cost-center-versions`, `consolidation/groups` (+ `/:id/adjustments`, `/:id/{worksheet,balance-sheet,income-statement}`) |
-| Platform | `GET platform/me`, `platform/tenants` (list, create), `GET/PATCH platform/tenants/:id`, `POST platform/tenants/:id/users/:userId/reset-credentials`, `POST platform/mfa/{setup,enable,disable}`; `GET auth/config` (public) |
+| Platform | `GET platform/me`, `platform/tenants` (list, create), `GET/PATCH platform/tenants/:id`, `platform/plans` (list, create), `PUT/DELETE platform/plans/:code`, `POST platform/tenants/:id/users/:userId/reset-credentials`, `POST platform/mfa/{setup,enable,disable}`; `GET auth/config` (public) |
 | Sales / purchases | `sl/{AR,AP}/parties`, `sl/{AR,AP}/documents` (+ `/:id/{post,void,print}`), `sl/{AR,AP}/settlements` (+ `/:id/void`), `POST sl/{AR,AP}/allocations`, `POST sl/{AR,AP}/allocations/:id/remove`, `GET sl/{AR,AP}/reports/{aging,statement}` |
 | Tax | `tax/codes`, `GET tax/report` |
 | Bank and cash | `cb/accounts`, `cb/transfers`, `cb/accounts/:id/reconciliations`, `cb/reconciliations` (+ `/:id/items`, `/:id/complete`, `/:id/statement` upload / delete, `/:id/match`, `/:id/statement/:lineId/post`) |

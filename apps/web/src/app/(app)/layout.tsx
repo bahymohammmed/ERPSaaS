@@ -6,6 +6,7 @@ import {
   Avatar,
   Box,
   Burger,
+  Button,
   Center,
   Collapse,
   Divider,
@@ -15,7 +16,10 @@ import {
   NavLink,
   ScrollArea,
   Select,
+  Stack,
   Text,
+  ThemeIcon,
+  Title,
   Tooltip,
   UnstyledButton,
   useComputedColorScheme,
@@ -198,7 +202,7 @@ const initials = (name: string) =>
 
 const Shell = ({ children }: { children: ReactNode }) => {
   const { t, name, locale, setLocale, digits, setDigits } = useI18n();
-  const { me, error, isLoading, company, selectCompany, can } = useSession();
+  const { me, error, isLoading, company, selectCompany, can, screenOpen, reportOpen } = useSession();
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure();
   const [mfaOpened, { open: openMfa, close: closeMfa }] = useDisclosure();
   const [collapsed, setCollapsed] = useLocalStorage({ key: 'erp-nav-collapsed', defaultValue: false });
@@ -214,7 +218,8 @@ const Shell = ({ children }: { children: ReactNode }) => {
   }, [error, router]);
   useEffect(closeMobile, [pathname, closeMobile]);
 
-  const allowed = (item: NavItem) => !item.permission || can(item.permission);
+  const allowed = (item: NavItem) => (!item.permission || can(item.permission)) && screenOpen(item.href);
+  const reportItems = REPORT_ITEMS.filter((r) => reportOpen(r.key));
 
   const logout = async () => {
     await api('/auth/logout', { method: 'POST' });
@@ -235,7 +240,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
       })),
     );
     const reports = can('gl.report.view')
-      ? REPORT_ITEMS.map((r) => ({ id: `report-${r.key}`, label: t(r.label), description: t('navReports'), leftSection: <IconReportAnalytics size={18} stroke={1.6} />, onClick: go(`/reports/${r.key}`) }))
+      ? reportItems.map((r) => ({ id: `report-${r.key}`, label: t(r.label), description: t('navReports'), leftSection: <IconReportAnalytics size={18} stroke={1.6} />, onClick: go(`/reports/${r.key}`) }))
       : [];
     const actions = [
       ...(can('gl.journal.create') ? [{ id: 'new-entry', label: t('newEntry'), leftSection: <IconFilePlus size={18} stroke={1.6} />, onClick: go('/gl/journals/new') }] : []),
@@ -446,7 +451,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
                   <IconChevronDown size={12} style={{ transform: reportsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms var(--ease-out)' }} />
                 </UnstyledButton>
                 <Collapse in={reportsOpen || reportsActive} transitionDuration={220}>
-                  {REPORT_ITEMS.map((r) => (
+                  {reportItems.map((r) => (
                     <NavLink
                       key={r.key}
                       className="nav-link"
@@ -473,8 +478,8 @@ const Shell = ({ children }: { children: ReactNode }) => {
                 <Text size="sm" fw={600} lineClamp={1}>
                   {me.tenant.name}
                 </Text>
-                <Text size="xs" c="dimmed" lineClamp={1} tt="capitalize">
-                  {me.tenant.plan_code}
+                <Text size="xs" c="dimmed" lineClamp={1}>
+                  {(locale === 'ar' ? me.tenant.plan_name_ar : me.tenant.plan_name_en) ?? me.tenant.plan_code}
                 </Text>
               </Box>
             )}
@@ -496,10 +501,29 @@ const Shell = ({ children }: { children: ReactNode }) => {
       <MfaModal opened={mfaOpened} enabled={!!me.user.mfa_enabled} onClose={closeMfa} />
       <AppShell.Main>
         <div key={pathname} className="page-enter">
-          {company ? children : <EmptyState />}
+          {!company ? <EmptyState /> : screenOpen(pathname) ? children : <NotInPlan />}
         </div>
       </AppShell.Main>
     </AppShell>
+  );
+};
+
+/** Shown in place of a screen whose module is not in the tenant's subscription. */
+const NotInPlan = () => {
+  const { t } = useI18n();
+  return (
+    <Center mih="50vh">
+      <Stack align="center" gap="xs" maw={420} ta="center">
+        <ThemeIcon size={56} radius="xl" variant="light" color="gray">
+          <IconLock size={28} stroke={1.6} />
+        </ThemeIcon>
+        <Title order={4}>{t('notInPlanTitle')}</Title>
+        <Text c="dimmed" size="sm">{t('notInPlanBody')}</Text>
+        <Button component={Link} href="/dashboard" variant="light" mt="sm">
+          {t('navDashboard')}
+        </Button>
+      </Stack>
+    </Center>
   );
 };
 

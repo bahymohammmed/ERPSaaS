@@ -6,3 +6,4 @@ export * from './schemas';
 export * from './report-document';
 export * from './words';
 export * from './features';
+export * from './brand';

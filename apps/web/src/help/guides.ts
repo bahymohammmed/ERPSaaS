@@ -1113,6 +1113,35 @@ export const GUIDES: Guide[] = [
       ],
     },
   },
+  {
+    id: 'platform-plans',
+    section: 'platform',
+    paths: ['/platform/plans'],
+    en: {
+      title: 'Subscription plans',
+      summary: 'Plans decide which modules a tenant can open, and the default number of companies and users.',
+      steps: [
+        'Choose New plan: code, Arabic and English names, description, monthly price, and default company and user limits.',
+        'Tick the modules the plan includes. Each module opens or closes all of its screens, reports and actions together, so a tenant never sees half a module.',
+        'Modules a module needs are ticked with it (sales and purchases need bank and cash), and unticking a module also unticks the modules that depend on it. The general ledger is always included.',
+        'Mark one plan as the default: it is used for self-service sign-up and for new tenants created without a plan.',
+        'On the Tenants tab, edit a tenant to move it to another plan. The change applies on the tenant\'s next request; hidden modules keep their data and reappear when the plan includes them again.',
+      ],
+      tips: ['A plan in use, or the default plan, cannot be deleted. Deactivate a plan to stop offering it; tenants already on it keep it.', 'Users on a tenant see only the modules of their plan in the menu, reports list and search.'],
+    },
+    ar: {
+      title: 'باقات الاشتراك',
+      summary: 'تحدد الباقات الوحدات التي يمكن للمؤسسة استخدامها، والعدد الافتراضي للشركات والمستخدمين.',
+      steps: [
+        'اضغط «باقة جديدة»: الرمز والاسمان والوصف والسعر الشهري وحدود الشركات والمستخدمين الافتراضية.',
+        'حدد الوحدات المشمولة. كل وحدة تفتح أو تغلق جميع شاشاتها وتقاريرها وإجراءاتها معاً، فلا ترى المؤسسة نصف وحدة.',
+        'الوحدات التي تحتاجها الوحدة تُحدد معها (المبيعات والمشتريات تحتاجان البنوك والنقدية)، وإلغاء وحدة يلغي الوحدات المعتمدة عليها. الأستاذ العام مشمول دائماً.',
+        'اجعل إحدى الباقات افتراضية: تُستخدم للتسجيل الذاتي وللمؤسسات الجديدة التي تُنشأ دون باقة.',
+        'من تبويب «المؤسسات» عدّل المؤسسة لنقلها إلى باقة أخرى. يسري التغيير من الطلب التالي، والوحدات المخفية تحتفظ ببياناتها وتعود عند إعادة إدراجها في الباقة.',
+      ],
+      tips: ['لا يمكن حذف باقة مستخدمة أو الباقة الافتراضية. أوقف الباقة لإيقاف عرضها، وتبقى المؤسسات المشتركة فيها عليها.', 'يرى مستخدمو المؤسسة وحدات باقتهم فقط في القائمة وقائمة التقارير والبحث.'],
+    },
+  },
 ];
 
 /** The guide for a route: the longest matching path prefix. */

@@ -32,11 +32,14 @@ import { notifyError, notifySuccess } from '@/components/notify';
 import { EmptyRow, TableSkeletonRows } from '@/components/states';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
+import type { Plan } from './plans/page';
 
 type Tenant = {
   id: string;
   name: string;
   plan_code: string;
+  plan_name_ar: string | null;
+  plan_name_en: string | null;
   max_companies: number;
   max_users: number;
   is_active: boolean;
@@ -53,11 +56,10 @@ type Detail = {
 };
 
 const CURRENCIES = ['KWD', 'SAR', 'AED', 'BHD', 'QAR', 'OMR', 'EGP', 'JOD', 'USD', 'EUR'];
-const PLANS = ['trial', 'standard', 'professional', 'enterprise'];
 
 const emptyTenant = () => ({
   name: '',
-  plan_code: 'standard',
+  plan_code: null as string | null,
   max_companies: 3,
   max_users: 25,
   company: { code: 'C01', name_ar: '', name_en: '', base_currency: 'KWD', fiscal_year_start_month: 1, first_fiscal_year: new Date().getFullYear(), seed_chart_of_accounts: true },
@@ -66,11 +68,19 @@ const emptyTenant = () => ({
 
 type NewTenant = ReturnType<typeof emptyTenant>;
 type Edit = { id: string; name: string; plan_code: string; max_companies: number; max_users: number };
+
 type Secret = { title: string; password: string | null; note: string };
 
 const PlatformPage = () => {
   const { t, locale, name, errorText } = useI18n();
   const tenants = useQuery({ queryKey: ['platform-tenants'], queryFn: () => api<Tenant[]>('/platform/tenants') });
+  const plans = useQuery({ queryKey: ['platform-plans'], queryFn: () => api<Plan[]>('/platform/plans') });
+  const planName = (p: { name_ar: string; name_en: string }) => (locale === 'ar' ? p.name_ar || p.name_en : p.name_en || p.name_ar);
+  const planOptions = (current?: string) =>
+    (plans.data ?? [])
+      .filter((p) => p.is_active || p.code === current)
+      .map((p) => ({ value: p.code, label: `${planName(p)}${p.is_default ? ` (${t('defaultPlan')})` : ''}` }));
+  const planOf = (code: string | null) => plans.data?.find((p) => (code ? p.code === code : p.is_default));
   const [form, setForm] = useState<NewTenant | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -148,7 +158,13 @@ const PlatformPage = () => {
       <PageHeader
         title={t('tenants')}
         actions={
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setForm(emptyTenant())}>
+          <Button
+            leftSection={<IconPlus size={16} />}
+            onClick={() => {
+              const plan = planOf(null);
+              setForm({ ...emptyTenant(), plan_code: plan?.code ?? null, max_companies: plan?.max_companies ?? 3, max_users: plan?.max_users ?? 25 });
+            }}
+          >
             {t('newTenant')}
           </Button>
         }
@@ -182,7 +198,11 @@ const PlatformPage = () => {
                       {tenant.name}
                     </Button>
                   </Table.Td>
-                  <Table.Td className="ltr">{tenant.plan_code}</Table.Td>
+                  <Table.Td>
+                    <Badge variant="light" color="gray">
+                      {(locale === 'ar' ? tenant.plan_name_ar : tenant.plan_name_en) ?? tenant.plan_code}
+                    </Badge>
+                  </Table.Td>
                   <Table.Td className="num">
                     {tenant.company_count} / {tenant.max_companies}
                   </Table.Td>
@@ -231,7 +251,16 @@ const PlatformPage = () => {
             <Title order={5}>{t('organisation')}</Title>
             <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <TextInput label={t('tenantName')} required value={form.name} onChange={(e) => setForm({ ...form, name: e.currentTarget.value })} />
-              <Select label={t('plan')} data={PLANS} value={form.plan_code} onChange={(v) => setForm({ ...form, plan_code: v ?? 'standard' })} searchable allowDeselect={false} />
+              <Select
+                label={t('plan')}
+                data={planOptions()}
+                value={form.plan_code}
+                onChange={(v) => {
+                  const plan = planOf(v);
+                  setForm({ ...form, plan_code: v, max_companies: plan?.max_companies ?? form.max_companies, max_users: plan?.max_users ?? form.max_users });
+                }}
+                allowDeselect={false}
+              />
               <NumberInput label={t('maxCompanies')} min={1} max={1000} value={form.max_companies} onChange={(v) => setForm({ ...form, max_companies: Number(v) || 1 })} />
               <NumberInput label={t('maxUsers')} min={1} max={10000} value={form.max_users} onChange={(v) => setForm({ ...form, max_users: Number(v) || 1 })} />
             </SimpleGrid>
@@ -282,7 +311,18 @@ const PlatformPage = () => {
         {edit && (
           <Stack>
             <TextInput label={t('tenantName')} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.currentTarget.value })} />
-            <Select label={t('plan')} data={[...new Set([...PLANS, edit.plan_code])]} value={edit.plan_code} onChange={(v) => setEdit({ ...edit, plan_code: v ?? edit.plan_code })} allowDeselect={false} />
+            <Select
+              label={t('plan')}
+              description={t('planChangeHint')}
+              data={planOptions(edit.plan_code)}
+              value={edit.plan_code}
+              onChange={(v) => {
+                const plan = planOf(v);
+                if (!v || !plan) return;
+                setEdit({ ...edit, plan_code: v, max_companies: plan.max_companies, max_users: plan.max_users });
+              }}
+              allowDeselect={false}
+            />
             <NumberInput label={t('maxCompanies')} min={1} max={1000} value={edit.max_companies} onChange={(v) => setEdit({ ...edit, max_companies: Number(v) || 1 })} />
             <NumberInput label={t('maxUsers')} min={1} max={10000} value={edit.max_users} onChange={(v) => setEdit({ ...edit, max_users: Number(v) || 1 })} />
             <Group justify="flex-end">

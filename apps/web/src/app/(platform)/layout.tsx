@@ -1,10 +1,10 @@
 'use client';
 
-import { AppShell, Badge, Center, Group, Loader, Menu, Text, UnstyledButton } from '@mantine/core';
+import { AppShell, Badge, Center, Group, Loader, Menu, SegmentedControl, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconChevronDown, IconShieldCheck } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 import { Brand } from '@/components/Brand';
 import { HelpButton } from '@/components/HelpButton';
@@ -20,6 +20,7 @@ export type PlatformMe = { user: { id: string; email: string; full_name: string;
 const PlatformLayout = ({ children }: { children: ReactNode }) => {
   const { t } = useI18n();
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const [mfaOpened, { open: openMfa, close: closeMfa }] = useDisclosure();
   const me = useQuery({ queryKey: ['platform-me'], queryFn: () => api<PlatformMe>('/platform/me'), retry: false });
@@ -51,6 +52,17 @@ const PlatformLayout = ({ children }: { children: ReactNode }) => {
             <Badge variant="light" visibleFrom="sm">
               {t('platformConsole')}
             </Badge>
+            <SegmentedControl
+              size="xs"
+              radius="md"
+              ms="md"
+              value={pathname.startsWith('/platform/plans') ? '/platform/plans' : '/platform'}
+              onChange={(v) => router.push(v)}
+              data={[
+                { value: '/platform', label: t('tenants') },
+                { value: '/platform/plans', label: t('subscriptionPlans') },
+              ]}
+            />
           </Group>
           <Group gap="xs" wrap="nowrap">
             <HelpButton />

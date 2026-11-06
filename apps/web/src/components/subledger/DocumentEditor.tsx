@@ -38,12 +38,12 @@ export const DocumentEditor = ({ side, id }: { side: LedgerSide; id: string }) =
   const isNew = id === 'new';
   const search = useSearchParams();
   const { t, name, errorText, locale, digits } = useI18n();
-  const { can, company } = useSession();
+  const { can, company, has } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
   const minor = company?.base_minor_units ?? 3;
   const { data: parties = [] } = useCompanyQuery<Party[]>(['sl-parties', side], `/sl/${side}/parties`);
-  const { data: taxCodes = [] } = useCompanyQuery<TaxCode[]>(['tax-codes'], '/tax/codes');
+  const { data: taxCodes = [] } = useCompanyQuery<TaxCode[]>(['tax-codes'], '/tax/codes', undefined, has('tax'));
   const detail = useQuery({ queryKey: [company?.id, 'sl-document', id], queryFn: () => api<Detail>(`/sl/${side}/documents/${id}`), enabled: !!company && !isNew });
   const doc = detail.data;
   const [docType, setDocType] = useState<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'>(search.get('type') === ui.note ? ui.note : 'INVOICE');

@@ -120,14 +120,14 @@ const ImportCard = ({ kind, title }: { kind: Kind; title: MessageKey }) => {
 
 const ImportPage = () => {
   const { t } = useI18n();
-  const { can } = useSession();
+  const { can, has } = useSession();
   return (
     <>
       <PageHeader title={t('navImport')} />
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
         <ImportCard kind="accounts" title="importAccounts" />
         <ImportCard kind="journals" title="importJournals" />
-        {can('fa.manage') && <ImportCard kind="fixed-assets" title="importAssets" />}
+        {can('fa.manage') && has('fixed_assets') && <ImportCard kind="fixed-assets" title="importAssets" />}
       </SimpleGrid>
     </>
   );

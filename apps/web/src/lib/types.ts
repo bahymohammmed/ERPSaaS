@@ -4,10 +4,12 @@ export type Named = { id: string; code: string; name_ar: string; name_en: string
 
 export type Me = {
   user: { id: string; email: string; full_name: string; preferred_locale: 'ar' | 'en'; digit_style: 'latn' | 'arab'; mfa_enabled?: boolean };
-  tenant: { id: string; name: string; plan_code: string };
+  tenant: { id: string; name: string; plan_code: string; plan_name_ar: string | null; plan_name_en: string | null };
   tenants: { tenant_id: string; tenant_name: string }[];
   companies: (Named & { base_currency: string; base_minor_units: number; require_approval: boolean })[];
   permissions: Permission[];
+  /** Modules in the tenant's subscription plan. */
+  features: string[];
   cost_center_scope: string[] | null;
 };
 

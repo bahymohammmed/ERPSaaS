@@ -3,7 +3,7 @@
 import { Box, Group, Stack, Text, ThemeIcon, Title } from '@mantine/core';
 import { IconChartPie, IconLanguage, IconShieldLock } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
-import { Brand, LogoMark } from '@/components/Brand';
+import { Brand } from '@/components/Brand';
 import { HelpButton } from '@/components/HelpButton';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -21,12 +21,12 @@ const AuthLayout = ({ children }: { children: ReactNode }) => {
     <Box mih="100vh" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)' }} className="auth-grid">
       <Box className="auth-hero" visibleFrom="md" p={56}>
         <Stack justify="space-between" h="100%" style={{ position: 'relative', zIndex: 1 }}>
-          <Group gap={10}>
-            <LogoMark size={36} />
-            <Text fw={700} size="lg">
-              {t('appName')}
+          <Stack gap={4}>
+            <Brand inverse />
+            <Text size="sm" style={{ opacity: 0.85 }}>
+              {t('appTagline')}
             </Text>
-          </Group>
+          </Stack>
           <Stack gap="xl" maw={460} className="stagger">
             <Title order={1} fz={38} lh={1.2} style={{ letterSpacing: '-0.02em' }}>
               {t('loginTagline')}

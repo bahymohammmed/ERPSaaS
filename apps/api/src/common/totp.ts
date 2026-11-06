@@ -1,3 +1,4 @@
+import { BRAND } from '@erp/shared';
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { config } from '../config';
 
@@ -57,7 +58,7 @@ export const verifyTotp = (secret: string, code: string, time = Date.now()): boo
     return expected.length === given.length && timingSafeEqual(expected, given);
   });
 
-export const otpauthUrl = (secret: string, account: string, issuer = 'ERP'): string =>
+export const otpauthUrl = (secret: string, account: string, issuer = BRAND.name_en): string =>
   `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 
 // Secrets are stored encrypted with AES-256-GCM under a key derived from MFA_ENCRYPTION_KEY.
