@@ -26,7 +26,7 @@ export class RateLimiter {
   }
 }
 
-const AUTH_PATHS = /^\/api\/auth\/(login|signup|mfa\/)/;
+const AUTH_PATHS = /^\/api\/auth\/(login|signup|mfa\/|password)/;
 
 /**
  * Brute-force protection on authentication (default 20 requests per minute per IP) and a general

@@ -137,7 +137,7 @@ describe('platform console', () => {
   it('closes public sign-up when configured', async () => {
     config.publicSignup = false;
     const cfg = await request(app.getHttpServer()).get('/api/auth/config');
-    expect(cfg.body).toEqual({ signup: false });
+    expect(cfg.body).toEqual({ signup: false, password_reset: true });
     await expect(signupTenant(app)).rejects.toThrow(/SIGNUP_DISABLED/);
     config.publicSignup = true;
   });
@@ -223,5 +223,17 @@ describe('subscription plans', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     const tenant = (await platform.get('/platform/tenants')).body.find((t: { id: string }) => t.id === res.body.tenant_id);
     expect(tenant).toMatchObject({ plan_code: 'standard', max_companies: 3, max_users: 25, plan_name_en: 'Standard' });
+  });
+});
+
+describe('platform admin password', () => {
+  it('changes the password and ends the old console session', async () => {
+    await new Promise((r) => setTimeout(r, 1100));
+    expect((await platform.post('/platform/password', { current_password: 'wrong', new_password: 'new-platform-pass-1' })).body.error.code).toBe('CURRENT_PASSWORD_INVALID');
+    const res = await platform.post('/platform/password', { current_password: adminPassword, new_password: 'new-platform-pass-1' });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect((await platform.get('/platform/me')).status).toBe(401);
+    expect((await client(app, res.body.token).get('/platform/me')).status).toBe(200);
+    expect((await login(adminEmail, 'new-platform-pass-1')).status).toBe(200);
   });
 });

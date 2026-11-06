@@ -175,6 +175,20 @@ export class AdminService {
     });
   }
 
+  async resetPassword(ctx: RequestContext, userId: string) {
+    if (userId === ctx.userId) throw new AppError('VALIDATION_FAILED', {}, [{ path: 'user', message: 'Change your own password from your account menu' }]);
+    const temporaryPassword = randomBytes(9).toString('base64url');
+    const passwordHash = await this.auth.hashPassword(temporaryPassword);
+    return this.db.withTenant(ctx, async (tx) => {
+      const row = await tx.one<{ result: string }>('SELECT core.reset_member_password($1, $2) AS result', [userId, passwordHash]);
+      if (row.result === 'not_member') throw notFound('user');
+      if (row.result === 'platform') throw new AppError('PLATFORM_ADMIN_ACCOUNT');
+      if (row.result === 'shared') throw new AppError('USER_IN_OTHER_TENANTS');
+      await this.audit.record(tx, ctx, { action: 'password_reset_by_admin', entityType: 'user', entityId: userId });
+      return { temporary_password: temporaryPassword };
+    });
+  }
+
   resetMfa(ctx: RequestContext, userId: string) {
     return this.db.withTenant(ctx, async (tx) => {
       const row = await tx.one<{ reset: boolean | null }>('SELECT core.reset_member_mfa($1) AS reset', [userId]);

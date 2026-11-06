@@ -1,6 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
-import { mfaCodeSchema, planSchema, platformCredentialsResetSchema, platformTenantSchema, platformTenantUpdateSchema } from '@erp/shared';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Res } from '@nestjs/common';
+import { changePasswordSchema, mfaCodeSchema, planSchema, platformCredentialsResetSchema, platformTenantSchema, platformTenantUpdateSchema } from '@erp/shared';
+import type { Response } from 'express';
+import { AUTH_COOKIE } from '../common/auth.guard';
 import { PlatformCtx, PlatformRoute } from '../common/decorators';
+import { TokenService } from '../common/token.service';
+import { config } from '../config';
 import type { PlatformContext } from '../common/request-context';
 import { parse } from '../common/zod.pipe';
 import { AuthService } from './auth.service';
@@ -13,6 +17,7 @@ export class PlatformController {
   constructor(
     private readonly platform: PlatformService,
     private readonly auth: AuthService,
+    private readonly tokens: TokenService,
   ) {}
 
   @Get('me')
@@ -69,6 +74,16 @@ export class PlatformController {
   @Delete('plans/:code')
   deletePlan(@PlatformCtx() ctx: PlatformContext, @Param('code') code: string) {
     return this.platform.deletePlan(ctx, code);
+  }
+
+  @Post('password')
+  @HttpCode(200)
+  async changePassword(@PlatformCtx() ctx: PlatformContext, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    const input = parse(changePasswordSchema, body);
+    await this.auth.changePassword(ctx.userId, null, input.current_password, input.new_password, ctx.ip);
+    const token = this.tokens.signPlatform(ctx.userId);
+    res.cookie(AUTH_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.secureCookies, maxAge: config.jwtTtlSeconds * 1000, path: '/' });
+    return { token, platform: true };
   }
 
   @Post('mfa/setup')

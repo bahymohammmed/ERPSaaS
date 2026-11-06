@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { companySchema, inviteUserSchema, roleSchema, updateMembershipSchema } from '@erp/shared';
 import { z } from 'zod';
@@ -60,6 +60,14 @@ export class AdminController {
   @RequirePermissions('admin.users')
   resetMfa(@Ctx() ctx: RequestContext, @Param('userId', ParseUUIDPipe) userId: string) {
     return this.admin.resetMfa(ctx, userId);
+  }
+
+  /** Sets a temporary password (shown once); the member must choose a new one at next sign-in. */
+  @Post('users/:userId/reset-password')
+  @HttpCode(200)
+  @RequirePermissions('admin.users')
+  resetPassword(@Ctx() ctx: RequestContext, @Param('userId', ParseUUIDPipe) userId: string) {
+    return this.admin.resetPassword(ctx, userId);
   }
 
   @Get('roles')

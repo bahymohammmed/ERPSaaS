@@ -65,6 +65,16 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+const newPasswordSchema = z.string().min(10).max(200);
+
+export const changePasswordSchema = z
+  .object({ current_password: z.string().min(1).max(200), new_password: newPasswordSchema })
+  .refine((v) => v.current_password !== v.new_password, { message: 'Choose a password different from the current one', path: ['new_password'] });
+
+export const forgotPasswordSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254), locale: z.enum(['ar', 'en']).optional() });
+
+export const resetPasswordSchema = z.object({ token: z.string().trim().min(20).max(200), new_password: newPasswordSchema });
+
 /** Platform console: a new tenant with its first company and administrator. */
 export const platformTenantSchema = z.object({
   name: z.string().trim().min(2).max(200),

@@ -1,20 +1,22 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
-import type { LoginInput, SignupInput } from '@erp/shared';
+import { BRAND, type LoginInput, type SignupInput } from '@erp/shared';
 import type { z } from 'zod';
 import type { userPreferencesSchema } from '@erp/shared';
 import { AppError } from '../common/app-error';
 import { AuditService } from '../common/audit.service';
+import { MailService } from '../common/mail.service';
 import type { RequestContext } from '../common/request-context';
 import { TokenService } from '../common/token.service';
 import { decryptSecret, encryptSecret, generateSecret, otpauthUrl, verifyTotp } from '../common/totp';
+import { config } from '../config';
 import { DbService, type Tx } from '../db/db.service';
 import { ProvisioningService } from './provisioning.service';
 
 type TenantSummary = { tenant_id: string; tenant_name: string };
 /** platform: a platform console session (no tenant). */
-export type Session = { token: string; tenantId: string | null; tenants: TenantSummary[]; platform?: boolean };
+export type Session = { token: string; tenantId: string | null; tenants: TenantSummary[]; platform?: boolean; password_change_required?: boolean };
 /** Whoever manages their own 2FA: a tenant member, or a platform admin (tenantId null). */
 type MfaActor = { userId: string; tenantId: string | null; ip: string };
 
@@ -28,6 +30,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly provisioning: ProvisioningService,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
   ) {}
 
   hashPassword(password: string): Promise<string> {
@@ -73,7 +76,7 @@ export class AuthService {
 
   async login(input: LoginInput, ip: string): Promise<Session> {
     const user = await this.db.withoutTenant((tx) =>
-      tx.maybeOne<{ user_id: string; password_hash: string; is_active: boolean; mfa_enabled: boolean; mfa_secret: string | null }>(
+      tx.maybeOne<{ user_id: string; password_hash: string; is_active: boolean; mfa_enabled: boolean; mfa_secret: string | null; must_change_password: boolean }>(
         'SELECT * FROM core.auth_lookup($1)',
         [input.email],
       ),
@@ -100,7 +103,67 @@ export class AuthService {
       await tx.query('UPDATE core.users SET last_login_at = now() WHERE id = $1', [user.user_id]);
       await this.audit.record(tx, { tenantId: tenant.tenant_id, userId: user.user_id, ip }, { action: 'login', entityType: 'user', entityId: user.user_id });
     });
-    return { token: this.tokens.sign({ sub: user.user_id, tid: tenant.tenant_id }), tenantId: tenant.tenant_id, tenants };
+    return { token: this.tokens.sign({ sub: user.user_id, tid: tenant.tenant_id }), tenantId: tenant.tenant_id, tenants, password_change_required: user.must_change_password };
+  }
+
+  // ---------------------------------------------------------------- passwords
+
+  /** A signed-in user (tenant member or platform admin) replaces their own password. */
+  async changePassword(userId: string, tenantId: string | null, currentPassword: string, newPassword: string, ip: string): Promise<void> {
+    const me = await this.db.withoutTenant((tx) => tx.one<{ email: string }>('SELECT email FROM core.users WHERE id = $1', [userId]), userId);
+    const user = await this.db.withoutTenant((tx) => tx.maybeOne<{ password_hash: string }>('SELECT password_hash FROM core.auth_lookup($1)', [me.email]));
+    const valid = user ? await verify(user.password_hash, currentPassword).catch(() => false) : false;
+    if (!valid) throw new AppError('CURRENT_PASSWORD_INVALID');
+    const passwordHash = await this.hashPassword(newPassword);
+    const write = async (tx: Tx) => {
+      await tx.query('UPDATE core.users SET password_hash = $2, password_changed_at = now(), must_change_password = false WHERE id = $1', [userId, passwordHash]);
+      if (tenantId) await this.audit.record(tx, { tenantId, userId, ip }, { action: 'password_change', entityType: 'user', entityId: userId });
+    };
+    if (tenantId) await this.db.withTenant({ tenantId, userId }, write);
+    else await this.db.withoutTenant(write, userId);
+  }
+
+  get passwordResetAvailable(): boolean {
+    return this.mail.enabled;
+  }
+
+  /**
+   * Starts a reset: e-mails a one-time link if the address belongs to an active user. The answer
+   * is the same either way, and the mail is sent in the background, so the response reveals
+   * nothing about which addresses are registered.
+   */
+  async requestPasswordReset(email: string, locale: 'ar' | 'en' | undefined, ip: string): Promise<{ ok: true }> {
+    if (!this.mail.enabled) throw new AppError('PASSWORD_RESET_UNAVAILABLE');
+    const token = randomBytes(32).toString('base64url');
+    const user = await this.db.withoutTenant((tx) =>
+      tx.maybeOne<{ user_id: string; email: string; full_name: string; preferred_locale: 'ar' | 'en' }>(
+        'SELECT * FROM core.password_reset_request($1, $2, $3, $4)',
+        [email, tokenHash(token), config.passwordResetMinutes, ip],
+      ),
+    );
+    if (user) {
+      void this.mail.send(resetMail(user.email, user.full_name, locale ?? user.preferred_locale, `${config.appUrl}/reset-password?token=${token}`)).catch(() => undefined);
+    }
+    return { ok: true };
+  }
+
+  async checkPasswordReset(token: string): Promise<{ valid: boolean }> {
+    const row = await this.db.withoutTenant((tx) => tx.one<{ valid: boolean }>('SELECT core.password_reset_check($1) AS valid', [tokenHash(token)]));
+    return { valid: row.valid };
+  }
+
+  /** Sets the new password with a valid link; every existing session of the user ends. */
+  async completePasswordReset(token: string, newPassword: string, ip: string): Promise<{ ok: true }> {
+    const passwordHash = await this.hashPassword(newPassword);
+    const row = await this.db.withoutTenant((tx) => tx.one<{ user_id: string | null }>('SELECT core.password_reset_complete($1, $2) AS user_id', [tokenHash(token), passwordHash]));
+    if (!row.user_id) throw new AppError('PASSWORD_RESET_INVALID');
+    const userId = row.user_id;
+    for (const tenant of await this.tenantsOf(userId)) {
+      await this.db.withTenant({ tenantId: tenant.tenant_id, userId }, (tx) =>
+        this.audit.record(tx, { tenantId: tenant.tenant_id, userId, ip }, { action: 'password_reset', entityType: 'user', entityId: userId }),
+      );
+    }
+    return { ok: true };
   }
 
   async switchTenant(userId: string, tenantId: string): Promise<Session> {
@@ -190,3 +253,40 @@ export class AuthService {
     return this.db.withoutTenant((tx) => tx.query<TenantSummary>('SELECT * FROM core.user_tenants($1)', [userId]));
   }
 }
+
+const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+
+const escapeHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
+
+/** Bilingual reset e-mail; the recipient's language comes first. */
+const resetMail = (to: string, name: string, locale: 'ar' | 'en', link: string) => {
+  const minutes = config.passwordResetMinutes;
+  const en = {
+    title: `Reset your ${BRAND.name_en} password`,
+    hello: `Hello ${name},`,
+    body: `We received a request to reset the password for ${to}. The link below works once and expires in ${minutes} minutes.`,
+    button: 'Choose a new password',
+    ignore: 'If you did not ask for this, ignore this e-mail; your password stays the same.',
+  };
+  const ar = {
+    title: `إعادة تعيين كلمة المرور في ${BRAND.name_ar}`,
+    hello: `مرحباً ${name}،`,
+    body: `تلقينا طلباً لإعادة تعيين كلمة المرور للحساب ${to}. الرابط أدناه يعمل مرة واحدة وتنتهي صلاحيته خلال ${minutes} دقيقة.`,
+    button: 'اختر كلمة مرور جديدة',
+    ignore: 'إذا لم تطلب ذلك فتجاهل هذه الرسالة؛ تبقى كلمة المرور كما هي.',
+  };
+  const parts = locale === 'ar' ? [{ t: ar, dir: 'rtl' }, { t: en, dir: 'ltr' }] : [{ t: en, dir: 'ltr' }, { t: ar, dir: 'rtl' }];
+  const block = ({ t, dir }: { t: typeof en; dir: string }) => `
+    <div dir="${dir}" style="text-align:${dir === 'rtl' ? 'right' : 'left'};margin:0 0 28px">
+      <h2 style="margin:0 0 12px;font-size:18px">${escapeHtml(t.title)}</h2>
+      <p>${escapeHtml(t.hello)}</p><p>${escapeHtml(t.body)}</p>
+      <p><a href="${link}" style="display:inline-block;background:#0b7a69;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">${escapeHtml(t.button)}</a></p>
+      <p style="color:#666;font-size:13px">${escapeHtml(t.ignore)}</p>
+    </div>`;
+  return {
+    to,
+    subject: `${parts[0]!.t.title} / ${parts[1]!.t.title}`,
+    text: parts.map(({ t }) => [t.title, '', t.hello, t.body, '', link, '', t.ignore].join('\n')).join('\n\n----\n\n'),
+    html: `<div style="font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:15px;line-height:1.6;max-width:560px;margin:auto;color:#1a1a1a">${parts.map(block).join('<hr style="border:0;border-top:1px solid #eee;margin:24px 0">')}</div>`,
+  };
+};

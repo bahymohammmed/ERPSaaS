@@ -1,6 +1,7 @@
 import { Controller, Get, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AuditService } from './common/audit.service';
+import { MailService } from './common/mail.service';
 import { AuthGuard } from './common/auth.guard';
 import { Public } from './common/decorators';
 import { ErrorFilter } from './common/error.filter';
@@ -64,6 +65,7 @@ class HealthController {
     DbService,
     TokenService,
     AuditService,
+    MailService,
     ProvisioningService,
     AuthService,
     AdminService,

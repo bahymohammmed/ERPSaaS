@@ -15,6 +15,7 @@ export default defineConfig({
       JWT_SECRET: 'test-secret',
       RECURRING_SCHEDULER: 'off',
       RATE_LIMIT: 'off',
+      SMTP_URL: 'json',
       STORAGE_DIR: './storage-test',
     },
   },

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from '@nestjs/common';
-import { loginSchema, type LoginInput, mfaCodeSchema, signupSchema, type SignupInput, switchTenantSchema, userPreferencesSchema } from '@erp/shared';
+import { changePasswordSchema, forgotPasswordSchema, loginSchema, type LoginInput, mfaCodeSchema, resetPasswordSchema, signupSchema, type SignupInput, switchTenantSchema, userPreferencesSchema } from '@erp/shared';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import { AppError } from '../common/app-error';
@@ -32,7 +32,37 @@ export class AuthController {
   @Public()
   @Get('config')
   publicConfig() {
-    return { signup: config.publicSignup };
+    return { signup: config.publicSignup, password_reset: this.auth.passwordResetAvailable };
+  }
+
+  /** E-mails a one-time reset link; the answer is the same whether or not the address is registered. */
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(200)
+  forgotPassword(@Body(new ZodPipe(forgotPasswordSchema)) body: z.infer<typeof forgotPasswordSchema>, @Req() req: Request) {
+    return this.auth.requestPasswordReset(body.email, body.locale, req.ip ?? '');
+  }
+
+  @Public()
+  @Post('password/check')
+  @HttpCode(200)
+  checkReset(@Body(new ZodPipe(resetPasswordSchema.pick({ token: true }))) body: { token: string }) {
+    return this.auth.checkPasswordReset(body.token);
+  }
+
+  @Public()
+  @Post('password/reset')
+  @HttpCode(200)
+  resetPassword(@Body(new ZodPipe(resetPasswordSchema)) body: z.infer<typeof resetPasswordSchema>, @Req() req: Request) {
+    return this.auth.completePasswordReset(body.token, body.new_password, req.ip ?? '');
+  }
+
+  /** Changes the signed-in user's password; other sessions end and this one gets a fresh token. */
+  @Post('password')
+  @HttpCode(200)
+  async changePassword(@Ctx() ctx: RequestContext, @Body(new ZodPipe(changePasswordSchema)) body: z.infer<typeof changePasswordSchema>, @Res({ passthrough: true }) res: Response) {
+    await this.auth.changePassword(ctx.userId, ctx.tenantId, body.current_password, body.new_password, ctx.ip);
+    return this.respond(res, await this.auth.switchTenant(ctx.userId, ctx.tenantId));
   }
 
   @Public()

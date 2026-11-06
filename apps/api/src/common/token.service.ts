@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { AppError } from './app-error';
 
-export type TokenClaims = { sub: string; tid: string };
+export type TokenClaims = { sub: string; tid: string; /** Issued at (seconds). */ iat?: number };
 /** Platform console sessions carry no tenant and are accepted only by @PlatformRoute() handlers. */
 const PLATFORM_SCOPE = 'platform';
 
@@ -20,14 +20,18 @@ export class TokenService {
   verify(token: string): TokenClaims {
     const payload = this.decode(token);
     if (typeof payload.tid !== 'string') throw new AppError('UNAUTHENTICATED');
-    return { sub: payload.sub, tid: payload.tid };
+    return { sub: payload.sub, tid: payload.tid, iat: payload.iat };
   }
 
   /** Returns the user id of a platform console token. */
   verifyPlatform(token: string): string {
+    return this.verifyPlatformClaims(token).sub;
+  }
+
+  verifyPlatformClaims(token: string): { sub: string; iat?: number } {
     const payload = this.decode(token);
     if (payload.scp !== PLATFORM_SCOPE) throw new AppError('UNAUTHENTICATED');
-    return payload.sub;
+    return { sub: payload.sub, iat: payload.iat };
   }
 
   private decode(token: string): jwt.JwtPayload & { sub: string } {

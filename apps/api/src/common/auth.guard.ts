@@ -32,9 +32,15 @@ export class AuthGuard implements CanActivate {
     if (!token) throw new AppError('UNAUTHENTICATED');
 
     if (this.reflector.getAllAndOverride<boolean>(PLATFORM_KEY, targets)) {
-      const userId = this.tokens.verifyPlatform(token);
-      const admin = await this.db.withoutTenant((tx) => tx.one<{ ok: boolean }>('SELECT core.is_platform_admin($1) AS ok', [userId]));
-      if (!admin.ok) throw new AppError('UNAUTHENTICATED');
+      const { sub: userId, iat } = this.tokens.verifyPlatformClaims(token);
+      const admin = await this.db.withoutTenant((tx) =>
+        tx.one<{ ok: boolean; changed: string | null }>(
+          `SELECT core.is_platform_admin($1) AS ok,
+                  (SELECT extract(epoch FROM date_trunc('second', s.password_changed_at)) FROM core.user_session_state($1) s) AS changed`,
+          [userId],
+        ),
+      );
+      if (!admin.ok || issuedBefore(iat, admin.changed)) throw new AppError('UNAUTHENTICATED');
       request.platformCtx = { userId, ip: request.ip ?? '' };
       return true;
     }
@@ -45,8 +51,9 @@ export class AuthGuard implements CanActivate {
     const companyId = companyHeader && UUID.test(companyHeader) ? companyHeader : null;
 
     const membership = await this.db.withTenant({ tenantId: claims.tid, userId: claims.sub }, async (tx) => {
-      const row = await tx.maybeOne<{ permissions: Permission[]; cost_center_scope: string[] | null; features: string[] | null }>(
-        `SELECT r.permissions, tu.cost_center_scope, p.features
+      const row = await tx.maybeOne<{ permissions: Permission[]; cost_center_scope: string[] | null; features: string[] | null; changed: string | null; must_change: boolean }>(
+        `SELECT r.permissions, tu.cost_center_scope, p.features, u.must_change_password AS must_change,
+                extract(epoch FROM date_trunc('second', u.password_changed_at)) AS changed
          FROM core.tenant_users tu
          JOIN core.roles r ON r.tenant_id = tu.tenant_id AND r.id = tu.role_id
          JOIN core.tenants t ON t.id = tu.tenant_id
@@ -63,6 +70,10 @@ export class AuthGuard implements CanActivate {
       return { ...row, company };
     });
     if (!membership) throw new AppError('UNAUTHENTICATED');
+    // Sessions issued before the latest password change are no longer valid.
+    if (issuedBefore(claims.iat, membership.changed)) throw new AppError('UNAUTHENTICATED');
+    // After an administrator reset, only the password change (and what the page needs) is allowed.
+    if (membership.must_change && !PASSWORD_CHANGE_PATHS.test(request.path)) throw new AppError('PASSWORD_CHANGE_REQUIRED');
 
     const requiresCompany = this.reflector.getAllAndOverride<boolean>(COMPANY_KEY, targets);
     if (requiresCompany) {
@@ -93,6 +104,11 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 }
+
+const PASSWORD_CHANGE_PATHS = /^\/api\/auth\/(me|password|logout|preferences|config)$/;
+
+/** The token was issued (whole seconds) before the password last changed. */
+const issuedBefore = (iat: number | undefined, changed: string | null) => changed != null && (iat == null || iat < Number(changed));
 
 const extractToken = (request: Request): string | null => {
   const header = request.header('authorization');
