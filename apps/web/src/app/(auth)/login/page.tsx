@@ -1,6 +1,6 @@
 'use client';
 
-import { Anchor, Button, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Box, Button, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,15 +18,15 @@ const LoginPage = () => {
   const [busy, setBusy] = useState(false);
   const [otp, setOtp] = useState('');
   const [needsOtp, setNeedsOtp] = useState(false);
-  const publicConfig = useQuery({ queryKey: ['public-config'], queryFn: () => api<{ signup: boolean }>('/auth/config') });
+  const publicConfig = useQuery({ queryKey: ['public-config'], queryFn: () => api<{ signup: boolean; password_reset?: boolean }>('/auth/config') });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     try {
-      const session = await api<{ platform?: boolean }>('/auth/login', { method: 'POST', body: { email, password, ...(needsOtp ? { otp } : {}) } });
+      const session = await api<{ platform?: boolean; password_change_required?: boolean }>('/auth/login', { method: 'POST', body: { email, password, ...(needsOtp ? { otp } : {}) } });
       queryClient.clear();
-      router.replace(session.platform ? '/platform' : '/dashboard');
+      router.replace(session.platform ? '/platform' : session.password_change_required ? '/change-password' : '/dashboard');
     } catch (error) {
       if (error instanceof ApiError && error.code === 'MFA_REQUIRED') {
         setNeedsOtp(true);
@@ -51,7 +51,14 @@ const LoginPage = () => {
             </Text>
           </div>
           <TextInput label={t('email')} type="email" required value={email} onChange={(e) => setEmail(e.currentTarget.value)} classNames={{ input: 'ltr' }} autoComplete="username" />
-          <PasswordInput label={t('password')} required value={password} onChange={(e) => setPassword(e.currentTarget.value)} autoComplete="current-password" />
+          <Box pos="relative">
+            <PasswordInput label={t('password')} required value={password} onChange={(e) => setPassword(e.currentTarget.value)} autoComplete="current-password" />
+            {publicConfig.data?.password_reset && (
+              <Anchor component={Link} href="/forgot-password" size="xs" pos="absolute" top={2} style={{ insetInlineEnd: 0 }}>
+                {t('forgotPassword')}
+              </Anchor>
+            )}
+          </Box>
           {needsOtp && (
             <TextInput
               label={t('verificationCode')}

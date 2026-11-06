@@ -67,6 +67,7 @@ import {
   IconReceiptTax,
   IconReportMoney,
   IconSearch,
+  IconKey,
   IconShieldCheck,
   IconShieldLock,
   IconSitemap,
@@ -81,6 +82,7 @@ import { type ReactNode, useEffect, useMemo } from 'react';
 import { Brand } from '@/components/Brand';
 import { HelpButton } from '@/components/HelpButton';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { ChangePasswordModal } from '@/components/ChangePasswordForm';
 import { MfaModal } from '@/components/MfaModal';
 import { EmptyState } from '@/components/states';
 import { ThemePicker, ThemeToggle } from '@/components/ThemeToggle';
@@ -205,6 +207,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
   const { me, error, isLoading, company, selectCompany, can, screenOpen, reportOpen } = useSession();
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure();
   const [mfaOpened, { open: openMfa, close: closeMfa }] = useDisclosure();
+  const [passwordOpened, { open: openPassword, close: closePassword }] = useDisclosure();
   const [collapsed, setCollapsed] = useLocalStorage({ key: 'erp-nav-collapsed', defaultValue: false });
   const [reportsOpen, setReportsOpen] = useLocalStorage({ key: 'erp-nav-reports', defaultValue: true });
   const { setColorScheme } = useMantineColorScheme();
@@ -216,6 +219,9 @@ const Shell = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (error instanceof ApiError && error.status === 401) router.replace('/login');
   }, [error, router]);
+  useEffect(() => {
+    if (me?.user.must_change_password) router.replace('/change-password');
+  }, [me, router]);
   useEffect(closeMobile, [pathname, closeMobile]);
 
   const allowed = (item: NavItem) => (!item.permission || can(item.permission)) && screenOpen(item.href);
@@ -404,6 +410,9 @@ const Shell = ({ children }: { children: ReactNode }) => {
                     <Menu.Divider />
                   </>
                 )}
+                <Menu.Item leftSection={<IconKey size={15} />} onClick={openPassword}>
+                  {t('changePassword')}
+                </Menu.Item>
                 <Menu.Item leftSection={<IconShieldCheck size={15} />} onClick={openMfa}>
                   {t('twoFactor')}
                 </Menu.Item>
@@ -499,6 +508,7 @@ const Shell = ({ children }: { children: ReactNode }) => {
         searchProps={{ leftSection: <IconSearch size={18} stroke={1.6} />, placeholder: t('searchPlaceholder') }}
       />
       <MfaModal opened={mfaOpened} enabled={!!me.user.mfa_enabled} onClose={closeMfa} />
+      <ChangePasswordModal opened={passwordOpened} onClose={closePassword} path="/auth/password" />
       <AppShell.Main>
         <div key={pathname} className="page-enter">
           {!company ? <EmptyState /> : screenOpen(pathname) ? children : <NotInPlan />}

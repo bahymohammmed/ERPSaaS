@@ -43,6 +43,11 @@ services:
       RUN_MIGRATIONS: "true"
       SEED_DEMO: ${SEED_DEMO:-false}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      # Public address of the site, used in password reset e-mails, e.g. https://erp.example.com
+      APP_URL: ${APP_URL:-}
+      # smtp(s)://user:password@host:port; leave empty to turn off "Forgot password?" (admins can still reset).
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       # Attachments live in the database, so one database backup covers everything.
       ATTACHMENT_STORAGE: database
       COOKIE_SECURE: "true"

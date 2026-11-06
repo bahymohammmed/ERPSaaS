@@ -21,10 +21,10 @@ export const config = {
   /** PUBLIC_SIGNUP=off: tenants are created only from the platform console. */
   publicSignup: process.env.PUBLIC_SIGNUP !== 'off',
   /** Public address of the web app, used in e-mailed links (never taken from request headers). */
-  appUrl: (process.env.APP_URL ?? process.env.CORS_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, ''),
+  appUrl: (process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:3000').replace(/\/+$/, ''),
   /** smtp(s)://user:pass@host:port; unset disables e-mailed password resets. "json" keeps messages in memory (tests). */
   smtpUrl: process.env.SMTP_URL || undefined,
-  mailFrom: process.env.MAIL_FROM ?? 'Diwan <no-reply@localhost>',
+  mailFrom: process.env.MAIL_FROM || 'Diwan <no-reply@localhost>',
   passwordResetMinutes: Number(process.env.PASSWORD_RESET_MINUTES ?? 60),
   secureCookies: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
 };

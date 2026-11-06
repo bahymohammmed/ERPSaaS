@@ -23,6 +23,7 @@ Fill in every value. Generate each secret with `openssl rand -hex 32` (or, in Po
 - `JWT_SECRET`, `MFA_ENCRYPTION_KEY`: application secrets. Never change `MFA_ENCRYPTION_KEY` after users enable 2FA.
 - `PLATFORM_ADMIN_EMAIL`, `PLATFORM_ADMIN_PASSWORD`: the account that signs in to `/platform` to create customer tenants.
 - `PUBLIC_SIGNUP=off`: customers get accounts from the platform console. Set `on` for self-service sign-up.
+- `APP_URL`, `SMTP_URL`, `MAIL_FROM`: e-mail for "Forgot password?" links. `APP_URL` is the public address (`https://erp.example.com`); `SMTP_URL` is `smtps://user:password@host:465` or `smtp://user:password@host:587` (encode `@` in the user name as `%40`). Without `SMTP_URL` the link is hidden and administrators reset passwords from Administration → Users.
 - `SEED_DEMO=true` loads a demo company (`demo@example.com`, password `DEMO_PASSWORD`). Leave it `false` for real use.
 
 `.env` holds secrets: it is ignored by git; keep a copy somewhere safe.

@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Alert, Badge, Button, Checkbox, Code, Group, Modal, MultiSelect, Paper, PasswordInput, Select, Stack, Table, TextInput } from '@mantine/core';
-import { IconPencil, IconPlus } from '@tabler/icons-react';
+import { ActionIcon, Alert, Badge, Button, Checkbox, Code, CopyButton, Group, Modal, MultiSelect, Paper, PasswordInput, Select, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { IconKey, IconPencil, IconPlus } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PageHeader } from '@/components/common';
@@ -9,6 +9,7 @@ import { notifyError, notifySuccess } from '@/components/notify';
 import { useI18n } from '@/i18n/i18n';
 import { api } from '@/lib/api';
 import { useCostCenters } from '@/lib/queries';
+import { useSession } from '@/lib/session';
 
 type Member = {
   user_id: string;
@@ -28,11 +29,23 @@ type Form = { user_id?: string; email: string; full_name: string; password: stri
 const UsersPage = () => {
   const { t, name, errorText, locale } = useI18n();
   const queryClient = useQueryClient();
+  const { me } = useSession();
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => api<Member[]>('/admin/users') });
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: () => api<Role[]>('/admin/roles') });
   const { data: costCenters = [] } = useCostCenters();
   const [form, setForm] = useState<Form | null>(null);
   const [temporary, setTemporary] = useState<string | null>(null);
+
+  const resetPassword = async (m: Member) => {
+    if (!window.confirm(`${t('confirmResetPassword')}\n${m.full_name} — ${m.email}`)) return;
+    try {
+      const result = await api<{ temporary_password: string }>(`/admin/users/${m.user_id}/reset-password`, { method: 'POST' });
+      setTemporary(result.temporary_password);
+      notifySuccess(t('saved'));
+    } catch (error) {
+      notifyError(errorText(error));
+    }
+  };
 
   const resetMfa = async (userId: string) => {
     if (!window.confirm(t('resetMfa'))) return;
@@ -77,7 +90,17 @@ const UsersPage = () => {
       />
       {temporary && (
         <Alert color="yellow" withCloseButton onClose={() => setTemporary(null)} mb="md" title={t('temporaryPassword')}>
-          <Code>{temporary}</Code>
+          <Group gap="sm">
+            <Code fz="md" className="ltr">{temporary}</Code>
+            <CopyButton value={temporary}>
+              {({ copied, copy }) => (
+                <Button size="compact-xs" variant="light" onClick={copy}>
+                  {copied ? t('copied') : t('copy')}
+                </Button>
+              )}
+            </CopyButton>
+          </Group>
+          <Text size="xs" mt={6}>{t('temporaryPasswordMustChange')}</Text>
         </Alert>
       )}
       <Paper withBorder p="sm">
@@ -111,6 +134,7 @@ const UsersPage = () => {
                     )}
                   </Table.Td>
                   <Table.Td>
+                    <Group gap={2} wrap="nowrap">
                     <ActionIcon
                       variant="subtle"
                       aria-label={t('edit')}
@@ -118,6 +142,14 @@ const UsersPage = () => {
                     >
                       <IconPencil size={16} />
                     </ActionIcon>
+                    {m.user_id !== me?.user.id && (
+                      <Tooltip label={t('resetPassword')}>
+                        <ActionIcon variant="subtle" color="orange" aria-label={t('resetPassword')} onClick={() => resetPassword(m)}>
+                          <IconKey size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}

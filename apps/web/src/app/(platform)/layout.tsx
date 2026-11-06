@@ -2,13 +2,14 @@
 
 import { AppShell, Badge, Center, Group, Loader, Menu, SegmentedControl, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconChevronDown, IconShieldCheck } from '@tabler/icons-react';
+import { IconChevronDown, IconKey, IconShieldCheck } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 import { Brand } from '@/components/Brand';
 import { HelpButton } from '@/components/HelpButton';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { ChangePasswordModal } from '@/components/ChangePasswordForm';
 import { MfaModal } from '@/components/MfaModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useI18n } from '@/i18n/i18n';
@@ -23,6 +24,7 @@ const PlatformLayout = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [mfaOpened, { open: openMfa, close: closeMfa }] = useDisclosure();
+  const [passwordOpened, { open: openPassword, close: closePassword }] = useDisclosure();
   const me = useQuery({ queryKey: ['platform-me'], queryFn: () => api<PlatformMe>('/platform/me'), retry: false });
 
   useEffect(() => {
@@ -81,6 +83,9 @@ const PlatformLayout = ({ children }: { children: ReactNode }) => {
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label className="ltr">{me.data.user.email}</Menu.Label>
+                <Menu.Item leftSection={<IconKey size={14} />} onClick={openPassword}>
+                  {t('changePassword')}
+                </Menu.Item>
                 <Menu.Item leftSection={<IconShieldCheck size={14} />} onClick={openMfa}>
                   {t('twoFactor')}
                 </Menu.Item>
@@ -94,6 +99,7 @@ const PlatformLayout = ({ children }: { children: ReactNode }) => {
         </Group>
       </AppShell.Header>
       <MfaModal opened={mfaOpened} enabled={me.data.user.mfa_enabled} onClose={closeMfa} basePath="/platform/mfa" sessionKey="platform-me" />
+      <ChangePasswordModal opened={passwordOpened} onClose={closePassword} path="/platform/password" />
       <AppShell.Main>
         <div className="page-enter">{children}</div>
       </AppShell.Main>

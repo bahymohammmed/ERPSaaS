@@ -186,6 +186,12 @@ Reports read the `account_balances` summary. `gl.rebuild_balances(company)` rebu
 - Every platform action on a tenant is written to that tenant's audit log. Cross-tenant reads go through `SECURITY DEFINER` functions that re-check the caller.
 - `PUBLIC_SIGNUP=off` closes self-service sign-up, so tenants are created only from the console. Docker Compose and Cloudflare default to `off`.
 
+### Passwords
+- **Forgot password?** on the sign-in page e-mails a one-time link (Arabic and English) that expires after an hour; the answer is the same whether or not the address is registered, and one link per minute is sent. Needs `SMTP_URL` and `APP_URL`; without SMTP the link is hidden.
+- **Change password** in the account menu (tenant users and platform admins).
+- **Administration → Users → reset password** gives a member a temporary password, shown once; they must choose their own at the next sign-in. Users who also belong to another organisation reset their own password instead. Platform support resets work the same way.
+- Every password change signs the user out everywhere else.
+
 ### Subscription plans
 - The console's **Subscription plans** tab creates, edits and deletes plans: names, description, monthly price, default company and user limits, and the **modules** included.
 - Modules (`packages/shared/src/features.ts`) bundle related screens, reports and API routes, so they open and close together: general ledger (always included), period-end, budgets, statement designer, tax, bank and cash, sales and receivables, purchases and payables, fixed assets, group companies.
@@ -269,7 +275,7 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 
 | Area | Routes |
 |---|---|
-| Auth | `POST auth/signup`, `auth/login`, `auth/logout`, `auth/switch-tenant`; `GET auth/me`; `PATCH auth/preferences` |
+| Auth | `POST auth/signup`, `auth/login`, `auth/logout`, `auth/switch-tenant`, `auth/password` (change), `auth/password/{forgot,check,reset}`; `GET auth/me`; `PATCH auth/preferences` |
 | Admin | `admin/companies`, `admin/users`, `admin/roles`, `GET admin/audit` |
 | Master data | `gl/accounts`, `gl/cost-centers`, `gl/dimensions`, `gl/dimension-values`, `gl/journal-types`, `gl/distribution-templates`, `gl/currencies`, `gl/exchange-rates`, `gl/fiscal-years`, `gl/periods`, `PATCH gl/periods/:id/status` |
 | Journals | `gl/journals` CRUD, `POST gl/journals/:id/{submit,approve,reject,post,reverse}`, attachments, `GET gl/journals/:id/audit`, `POST gl/postings` |
@@ -289,7 +295,7 @@ All routes are under `/api`. Company-scoped routes need the `X-Company-Id` heade
 - MT940 / CAMT statement formats and live bank feeds (CSV and Excel import only).
 - Tax-inclusive prices and per-jurisdiction tax return forms (the tax report is a summary by code).
 - OIDC/SSO.
-- Email delivery of invitations (a temporary password is shown once to the administrator).
+- E-mailed invitations (a temporary password is shown once to the administrator; only password resets are e-mailed).
 - Object storage for attachments (local disk, or the database with `ATTACHMENT_STORAGE=database`).
 - Dedicated-database tenants and per-tenant restore.
 - Automatic elimination of intra-group revenue and expense (only balances are eliminated; use manual adjustments).

@@ -32,7 +32,7 @@ export const GUIDES: Guide[] = [
   {
     id: 'sign-in',
     section: 'start',
-    paths: ['/login', '/signup'],
+    paths: ['/login', '/signup', '/forgot-password', '/reset-password', '/change-password'],
     en: {
       title: 'Signing in and your account',
       summary: 'Sign in with your email and password. If your organisation has more than one tenant or company, you can switch between them after signing in.',
@@ -40,11 +40,13 @@ export const GUIDES: Guide[] = [
         'Enter your email and password, then choose Sign in.',
         'If two-factor authentication is on, enter the 6-digit code from your authenticator app when asked.',
         'Pick the company you want to work in from the selector at the top of the screen.',
-        'Open the menu under your name to switch organisation, change digits (123 or ١٢٣), turn on two-factor authentication, or sign out.',
+        'Open the menu under your name to switch organisation, change your password, change digits (123 or ١٢٣), turn on two-factor authentication, or sign out.',
+        'Forgot your password? Choose Forgot password? on the sign-in page and enter your email. The link you receive works once and expires after an hour.',
         'Use the language button (ع / EN) to switch the whole application between Arabic and English.',
       ],
       tips: [
-        'If you were given a temporary password, keep it private and ask your administrator to reset it if it is lost.',
+        'If an administrator gave you a temporary password, you choose your own the first time you sign in.',
+        'Changing your password signs you out on every other device.',
         'Self-service sign-up may be closed by the service provider; in that case your account is created by them.',
         'After 20 failed attempts in one minute, sign-in is paused briefly for your network address.',
       ],
@@ -56,7 +58,8 @@ export const GUIDES: Guide[] = [
         'أدخل البريد الإلكتروني وكلمة المرور ثم اضغط «تسجيل الدخول».',
         'إذا كان التحقق بخطوتين مفعلاً، أدخل الرمز المكون من 6 أرقام من تطبيق المصادقة عند طلبه.',
         'اختر الشركة التي تريد العمل عليها من القائمة في أعلى الشاشة.',
-        'من القائمة أسفل اسمك يمكنك تبديل المؤسسة، واختيار شكل الأرقام (123 أو ١٢٣)، وتفعيل التحقق بخطوتين، وتسجيل الخروج.',
+        'من القائمة أسفل اسمك يمكنك تبديل المؤسسة، وتغيير كلمة المرور، واختيار شكل الأرقام (123 أو ١٢٣)، وتفعيل التحقق بخطوتين، وتسجيل الخروج.',
+        'نسيت كلمة المرور؟ اضغط «نسيت كلمة المرور؟» في صفحة الدخول وأدخل بريدك. الرابط الذي يصلك يعمل مرة واحدة وتنتهي صلاحيته بعد ساعة.',
         'استخدم زر اللغة (ع / EN) لتحويل النظام بالكامل بين العربية والإنجليزية.',
       ],
       tips: [
@@ -1024,8 +1027,9 @@ export const GUIDES: Guide[] = [
         'Choose Add user: email, full name and role. Leave the password empty to get a temporary one to hand over.',
         'Optionally limit the user to some cost centers; they will only see those subtrees.',
         'Edit a user to change role or deactivate them; Reset 2FA if they lost their phone.',
+        'The key icon resets a user\'s password: a temporary password is shown once to hand over, and they choose their own at the next sign-in.',
       ],
-      tips: ['A user can belong to several organisations with the same email.', 'You cannot change your own role or deactivate yourself.'],
+      tips: ['Users who also belong to another organisation reset their own password with Forgot password?.', 'A user can belong to several organisations with the same email.', 'You cannot change your own role or deactivate yourself.'],
     },
     ar: {
       title: 'المستخدمون',
@@ -1034,8 +1038,9 @@ export const GUIDES: Guide[] = [
         'اضغط «إضافة مستخدم»: البريد والاسم الكامل والدور. اترك كلمة المرور فارغة للحصول على كلمة مؤقتة تسلمها له.',
         'يمكنك تقييد المستخدم ببعض مراكز التكلفة فلا يرى إلا ما تحتها.',
         'عدّل المستخدم لتغيير دوره أو إيقافه، واضغط «إعادة ضبط التحقق بخطوتين» إذا فقد هاتفه.',
+        'أيقونة المفتاح تعيد تعيين كلمة مرور المستخدم: تظهر كلمة مؤقتة مرة واحدة لتسليمها، ويختار كلمته الخاصة عند الدخول التالي.',
       ],
-      tips: ['يمكن للمستخدم الانتماء لأكثر من مؤسسة بالبريد نفسه.', 'لا يمكنك تغيير دورك أو إيقاف نفسك.'],
+      tips: ['المستخدم العضو في مؤسسة أخرى يعيد تعيين كلمة مروره بنفسه من «نسيت كلمة المرور؟».', 'يمكن للمستخدم الانتماء لأكثر من مؤسسة بالبريد نفسه.', 'لا يمكنك تغيير دورك أو إيقاف نفسك.'],
     },
   },
   {
