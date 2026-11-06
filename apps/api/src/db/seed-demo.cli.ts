@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { PERMISSIONS } from '@erp/shared';
+import { FEATURE_KEYS, PERMISSIONS } from '@erp/shared';
 import { AppModule } from '../app.module';
 import type { CompanyContext } from '../common/request-context';
 import { JournalsService } from '../gl/journals.service';
@@ -46,7 +46,7 @@ const run = async (): Promise<void> => {
     if (!tenantId) throw new Error('signup returned no tenant');
     const userId = (await db.withoutTenant((tx) => tx.one<{ id: string }>('SELECT core.find_user_id($1) AS id', [EMAIL]))).id;
     const companyId = (await db.withTenant({ tenantId, userId }, (tx) => tx.one<{ id: string }>('SELECT id FROM core.companies LIMIT 1'))).id;
-    const ctx: CompanyContext = { tenantId, userId, companyId, permissions: new Set(PERMISSIONS), costCenterScope: null, ip: '127.0.0.1' };
+    const ctx: CompanyContext = { tenantId, userId, companyId, permissions: new Set(PERMISSIONS), costCenterScope: null, features: new Set(FEATURE_KEYS), ip: '127.0.0.1' };
 
     const lookup = async (table: string) =>
       Object.fromEntries(

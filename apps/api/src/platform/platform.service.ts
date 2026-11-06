@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { platformCredentialsResetSchema, PlatformTenantInput, platformTenantUpdateSchema } from '@erp/shared';
+import { type PlanInput, type platformCredentialsResetSchema, type PlatformTenantInput, type platformTenantUpdateSchema, withDependencies } from '@erp/shared';
 import type { z } from 'zod';
 import { AppError, notFound } from '../common/app-error';
 import { AuditService } from '../common/audit.service';
@@ -32,7 +32,14 @@ export class PlatformService {
   }
 
   listTenants(ctx: PlatformContext) {
-    return this.db.withoutTenant((tx) => tx.query('SELECT * FROM core.platform_tenants()'), ctx.userId);
+    return this.db.withoutTenant(
+      (tx) =>
+        tx.query(
+          `SELECT t.*, p.name_ar AS plan_name_ar, p.name_en AS plan_name_en
+           FROM core.platform_tenants() t LEFT JOIN core.plans p ON p.code = t.plan_code`,
+        ),
+      ctx.userId,
+    );
   }
 
   /**
@@ -98,6 +105,11 @@ export class PlatformService {
     return this.inTenant(ctx, tenantId, async (tx) => {
       const before = await tx.maybeOne('SELECT name, plan_code, max_companies, max_users, is_active FROM core.tenants WHERE id = $1 FOR UPDATE', [tenantId]);
       if (!before) throw notFound('tenant');
+      if (input.plan_code && input.plan_code !== (before as { plan_code: string }).plan_code) {
+        const plan = await tx.maybeOne<{ is_active: boolean }>('SELECT is_active FROM core.plans WHERE code = $1', [input.plan_code]);
+        if (!plan) throw notFound('plan');
+        if (!plan.is_active) throw new AppError('PLAN_INACTIVE');
+      }
       const row = await tx.one(
         `UPDATE core.tenants SET name = COALESCE($2, name), plan_code = COALESCE($3, plan_code),
            max_companies = COALESCE($4, max_companies), max_users = COALESCE($5, max_users), is_active = COALESCE($6, is_active)
@@ -139,6 +151,78 @@ export class PlatformService {
       });
       return { temporary_password: input.password ? null : password };
     });
+  }
+
+  // ---------------------------------------------------------------- subscription plans
+
+  listPlans(ctx: PlatformContext) {
+    return this.db.withoutTenant(
+      (tx) =>
+        tx.query(
+          `SELECT p.*, COALESCE(u.tenant_count, 0) AS tenant_count
+           FROM core.plans p LEFT JOIN core.platform_plan_usage() u ON u.plan_code = p.code
+           ORDER BY p.sort_order, p.code`,
+        ),
+      ctx.userId,
+    );
+  }
+
+  /** Creates or updates a plan. Modules are stored with everything they require. */
+  savePlan(ctx: PlatformContext, input: PlanInput, code?: string) {
+    return this.db.withoutTenant(async (tx) => {
+      const features = withDependencies(input.features);
+      const values = [
+        input.name_ar || input.name_en,
+        input.name_en || input.name_ar,
+        input.description_ar,
+        input.description_en,
+        features,
+        input.max_companies,
+        input.max_users,
+        input.price_monthly ?? null,
+        input.price_currency,
+        input.is_active,
+        input.is_default,
+        input.sort_order,
+      ];
+      if (input.is_default && !input.is_active) throw new AppError('PLAN_DEFAULT');
+      if (code) {
+        const before = await tx.maybeOne<{ is_default: boolean }>('SELECT is_default FROM core.plans WHERE code = $1 FOR UPDATE', [code]);
+        if (!before) throw notFound('plan');
+        // There must always be a default plan for self-service sign-up.
+        if (before.is_default && !input.is_default) throw new AppError('PLAN_DEFAULT');
+      } else {
+        const exists = await tx.maybeOne('SELECT 1 FROM core.plans WHERE code = $1', [input.code]);
+        if (exists) throw new AppError('DUPLICATE_CODE', { code: input.code });
+      }
+      if (input.is_default) await tx.query('UPDATE core.plans SET is_default = false WHERE is_default AND code <> $1', [code ?? input.code]);
+      const row = code
+        ? await tx.one(
+            `UPDATE core.plans SET code = $1, name_ar = $3, name_en = $4, description_ar = $5, description_en = $6, features = $7, max_companies = $8,
+               max_users = $9, price_monthly = $10, price_currency = $11, is_active = $12, is_default = $13, sort_order = $14, updated_at = now()
+             WHERE code = $2 RETURNING *`,
+            [input.code, code, ...values],
+          )
+        : await tx.one(
+            `INSERT INTO core.plans (code, name_ar, name_en, description_ar, description_en, features, max_companies, max_users, price_monthly,
+               price_currency, is_active, is_default, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+            [input.code, ...values],
+          );
+      return row;
+    }, ctx.userId);
+  }
+
+  deletePlan(ctx: PlatformContext, code: string) {
+    return this.db.withoutTenant(async (tx) => {
+      const plan = await tx.maybeOne<{ is_default: boolean }>('SELECT is_default FROM core.plans WHERE code = $1 FOR UPDATE', [code]);
+      if (!plan) throw notFound('plan');
+      if (plan.is_default) throw new AppError('PLAN_DEFAULT');
+      const usage = await tx.maybeOne<{ tenant_count: number }>('SELECT tenant_count FROM core.platform_plan_usage() WHERE plan_code = $1', [code]);
+      if (usage && usage.tenant_count > 0) throw new AppError('PLAN_IN_USE', { count: usage.tenant_count });
+      await tx.query('DELETE FROM core.plans WHERE code = $1', [code]);
+      return { deleted: true };
+    }, ctx.userId);
   }
 
   private inTenant<T>(ctx: PlatformContext, tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {

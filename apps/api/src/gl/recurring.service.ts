@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { type JournalLineInput, PERMISSIONS, type RecurrenceFrequency, type RecurringInput } from '@erp/shared';
+import { FEATURE_KEYS, type JournalLineInput, PERMISSIONS, type RecurrenceFrequency, type RecurringInput } from '@erp/shared';
 import { AppError, notFound } from '../common/app-error';
 import { AuditService } from '../common/audit.service';
 import { addMonths, today } from '../common/dates';
@@ -274,6 +274,7 @@ export class RecurringScheduler implements OnApplicationBootstrap, OnApplication
           companyId: item.company_id,
           permissions: new Set(PERMISSIONS),
           costCenterScope: null,
+          features: new Set(FEATURE_KEYS),
           ip: 'scheduler',
         };
         try {

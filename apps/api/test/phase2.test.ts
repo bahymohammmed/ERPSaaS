@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { PERMISSIONS, toMoney } from '@erp/shared';
+import { FEATURE_KEYS, PERMISSIONS, toMoney } from '@erp/shared';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CompanyContext } from '../src/common/request-context';
@@ -13,7 +13,7 @@ let f: Fixture;
 const period = (code: string) => f.periods.find((p) => p.code === code)!.id;
 const byName = (rows: Row[], en: string) => rows.find((r) => typeof r.cells.name === 'object' && r.cells.name?.en === en);
 const byCode = (rows: Row[], code: string) => rows.find((r) => r.cells.code === code);
-const ctx = (): CompanyContext => ({ tenantId: f.tenantId, userId: f.userId, companyId: f.companyId, permissions: new Set(PERMISSIONS), costCenterScope: null, ip: 'test' });
+const ctx = (): CompanyContext => ({ tenantId: f.tenantId, userId: f.userId, companyId: f.companyId, permissions: new Set(PERMISSIONS), costCenterScope: null, features: new Set(FEATURE_KEYS), ip: 'test' });
 
 const xlsx = async (rows: (string | number)[][]): Promise<Buffer> => {
   const wb = new ExcelJS.Workbook();

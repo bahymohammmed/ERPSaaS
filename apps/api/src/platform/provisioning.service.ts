@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DEFAULT_NORMAL_BALANCE, SYSTEM_ROLES, type SystemRoleCode } from '@erp/shared';
+import { AppError, notFound } from '../common/app-error';
 import type { Tx } from '../db/db.service';
 import {
   DEFAULT_ASSET_CATEGORIES,
@@ -29,9 +30,9 @@ export type NewCompany = {
 export type NewTenant = {
   id: string;
   name: string;
-  plan_code?: string;
-  max_companies?: number;
-  max_users?: number;
+  plan_code?: string | null;
+  max_companies?: number | null;
+  max_users?: number | null;
   /** Becomes the tenant administrator; the user row must already exist. */
   admin_user_id: string;
   company: NewCompany;
@@ -51,10 +52,17 @@ export class ProvisioningService {
 
   /** Tenant row, system roles, the administrator's membership and the first company. Runs in the new tenant's context. */
   async createTenant(tx: Tx, input: NewTenant): Promise<{ companyId: string }> {
+    // Without a plan the default plan applies; limits come from the plan unless given.
+    const plan = await tx.maybeOne<{ code: string; max_companies: number; max_users: number; is_active: boolean }>(
+      'SELECT code, max_companies, max_users, is_active FROM core.plans WHERE ($1::text IS NULL AND is_default) OR code = $1',
+      [input.plan_code ?? null],
+    );
+    if (input.plan_code && !plan) throw notFound('plan');
+    if (plan && !plan.is_active) throw new AppError('PLAN_INACTIVE');
     await tx.query(
       `INSERT INTO core.tenants (id, name, plan_code, max_companies, max_users)
        VALUES ($1, $2, COALESCE($3, 'standard'), COALESCE($4, 3), COALESCE($5, 25))`,
-      [input.id, input.name, input.plan_code ?? null, input.max_companies ?? null, input.max_users ?? null],
+      [input.id, input.name, plan?.code ?? null, input.max_companies ?? plan?.max_companies ?? null, input.max_users ?? plan?.max_users ?? null],
     );
     const roles = await this.createSystemRoles(tx, input.id);
     await tx.query('INSERT INTO core.tenant_users (tenant_id, user_id, role_id) VALUES ($1, $2, $3)', [input.id, input.admin_user_id, roles.ADMIN]);

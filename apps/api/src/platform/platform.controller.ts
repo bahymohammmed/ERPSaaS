@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { mfaCodeSchema, platformCredentialsResetSchema, platformTenantSchema, platformTenantUpdateSchema } from '@erp/shared';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
+import { mfaCodeSchema, planSchema, platformCredentialsResetSchema, platformTenantSchema, platformTenantUpdateSchema } from '@erp/shared';
 import { PlatformCtx, PlatformRoute } from '../common/decorators';
 import type { PlatformContext } from '../common/request-context';
 import { parse } from '../common/zod.pipe';
@@ -49,6 +49,26 @@ export class PlatformController {
     @Body() body: unknown,
   ) {
     return this.platform.resetCredentials(ctx, id, userId, parse(platformCredentialsResetSchema, body ?? {}));
+  }
+
+  @Get('plans')
+  plans(@PlatformCtx() ctx: PlatformContext) {
+    return this.platform.listPlans(ctx);
+  }
+
+  @Post('plans')
+  createPlan(@PlatformCtx() ctx: PlatformContext, @Body() body: unknown) {
+    return this.platform.savePlan(ctx, parse(planSchema, body));
+  }
+
+  @Put('plans/:code')
+  updatePlan(@PlatformCtx() ctx: PlatformContext, @Param('code') code: string, @Body() body: unknown) {
+    return this.platform.savePlan(ctx, parse(planSchema, body), code);
+  }
+
+  @Delete('plans/:code')
+  deletePlan(@PlatformCtx() ctx: PlatformContext, @Param('code') code: string) {
+    return this.platform.deletePlan(ctx, code);
   }
 
   @Post('mfa/setup')

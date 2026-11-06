@@ -68,9 +68,9 @@ export type LoginInput = z.infer<typeof loginSchema>;
 /** Platform console: a new tenant with its first company and administrator. */
 export const platformTenantSchema = z.object({
   name: z.string().trim().min(2).max(200),
-  plan_code: z.string().trim().min(1).max(30).default('standard'),
-  max_companies: z.number().int().min(1).max(1000).default(3),
-  max_users: z.number().int().min(1).max(10000).default(25),
+  plan_code: z.string().trim().min(1).max(30).nullish(),
+  max_companies: z.number().int().min(1).max(1000).nullish(),
+  max_users: z.number().int().min(1).max(10000).nullish(),
   company: z.object({
     code: codeSchema,
     name_ar: z.string().trim().max(200).default(''),
@@ -97,6 +97,25 @@ export const platformTenantUpdateSchema = z.object({
   max_users: z.number().int().min(1).max(10000).optional(),
   is_active: z.boolean().optional(),
 });
+
+/** A subscription plan; features are module keys from features.ts (dependencies are added on save). */
+export const planSchema = z
+  .object({
+    code: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_-]{0,29}$/, 'Lowercase letters, digits, - and _'),
+    ...bilingualNames,
+    description_ar: z.string().trim().max(500).default(''),
+    description_en: z.string().trim().max(500).default(''),
+    features: z.array(z.string()).max(50),
+    max_companies: z.number().int().min(1).max(1000),
+    max_users: z.number().int().min(1).max(10000),
+    price_monthly: z.union([z.string(), z.number()]).transform(String).refine((v) => /^\d{1,9}(\.\d{1,3})?$/.test(v), { message: 'Invalid amount' }).nullish(),
+    price_currency: z.string().trim().length(3).default('KWD'),
+    is_active: z.boolean().default(true),
+    is_default: z.boolean().default(false),
+    sort_order: z.number().int().min(0).max(10000).default(0),
+  })
+  .refine(requireOneName, nameIssue);
+export type PlanInput = z.infer<typeof planSchema>;
 
 export const platformCredentialsResetSchema = z.object({
   password: z.string().min(10).max(200).optional(),

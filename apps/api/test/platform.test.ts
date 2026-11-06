@@ -153,3 +153,75 @@ describe('platform console', () => {
     }
   });
 });
+
+describe('subscription plans', () => {
+  const plan = (overrides: Record<string, unknown> = {}) => ({
+    code: 'books',
+    name_en: 'Books only',
+    name_ar: 'الدفاتر فقط',
+    features: ['tax'],
+    max_companies: 1,
+    max_users: 2,
+    ...overrides,
+  });
+
+  it('lists the seeded plans with the default', async () => {
+    const res = await platform.get('/platform/plans');
+    expect(res.status).toBe(200);
+    const codes = (res.body as { code: string; is_default: boolean }[]).map((p) => p.code);
+    expect(codes).toEqual(expect.arrayContaining(['starter', 'business', 'enterprise', 'standard']));
+    expect(res.body.find((p: { is_default: boolean }) => p.is_default).code).toBe('standard');
+    expect((await tenantFixture.api.get('/platform/plans')).status).toBe(401);
+  });
+
+  it('stores modules with what they require', async () => {
+    const res = await platform.post('/platform/plans', plan({ code: 'sales-only', features: ['sales', 'unknown'] }));
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body.features).toEqual(['gl', 'banking', 'sales']);
+    expect((await platform.post('/platform/plans', plan({ code: 'sales-only' }))).body.error.code).toBe('DUPLICATE_CODE');
+    expect((await platform.delete('/platform/plans/sales-only')).status).toBe(200);
+  });
+
+  it('closes the modules a tenant plan does not include', async () => {
+    expect((await platform.post('/platform/plans', plan())).status).toBe(201);
+    expect((await platform.patch(`/platform/tenants/${tenantFixture.tenantId}`, { plan_code: 'books' })).status).toBe(200);
+
+    const me = (await tenantFixture.api.get('/auth/me')).body;
+    expect(me.features).toEqual(['gl', 'tax']);
+    expect(me.tenant.plan_name_en).toBe('Books only');
+    const blocked = await tenantFixture.api.get('/sl/AR/parties');
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error.code).toBe('FEATURE_NOT_IN_PLAN');
+    expect((await tenantFixture.api.get('/fa/categories')).status).toBe(403);
+    expect((await tenantFixture.api.get('/gl/budgets')).status).toBe(403);
+    expect((await tenantFixture.api.get('/tax/codes')).status).toBe(200);
+    expect((await tenantFixture.api.get('/gl/accounts')).status).toBe(200);
+    expect((await tenantFixture.api.get('/gl/reports/trial-balance')).status).not.toBe(403);
+
+    // Adding sales to the plan opens it, with the bank module it needs.
+    expect((await platform.put('/platform/plans/books', plan({ features: ['tax', 'sales'] }))).body.features).toEqual(['gl', 'tax', 'banking', 'sales']);
+    expect((await tenantFixture.api.get('/sl/AR/parties')).status).toBe(200);
+    expect((await tenantFixture.api.get('/cb/accounts')).status).toBe(200);
+  });
+
+  it('protects plans in use and the default plan', async () => {
+    const inUse = await platform.delete('/platform/plans/books');
+    expect(inUse.body.error.code).toBe('PLAN_IN_USE');
+    expect((await platform.delete('/platform/plans/standard')).body.error.code).toBe('PLAN_DEFAULT');
+    const standard = (await platform.get('/platform/plans')).body.find((p: { code: string }) => p.code === 'standard');
+    expect((await platform.put('/platform/plans/standard', { ...standard, is_default: false })).body.error.code).toBe('PLAN_DEFAULT');
+
+    await platform.put('/platform/plans/books', plan({ is_active: false }));
+    expect((await platform.patch(`/platform/tenants/${tenantFixture.tenantId}`, { plan_code: 'starter' })).status).toBe(200);
+    expect((await platform.patch(`/platform/tenants/${tenantFixture.tenantId}`, { plan_code: 'books' })).body.error.code).toBe('PLAN_INACTIVE');
+    expect((await platform.delete('/platform/plans/books')).status).toBe(200);
+    expect((await platform.patch(`/platform/tenants/${tenantFixture.tenantId}`, { plan_code: 'standard' })).status).toBe(200);
+  });
+
+  it('gives a new tenant the default plan and its limits', async () => {
+    const res = await platform.post('/platform/tenants', newTenant({ plan_code: undefined, max_companies: undefined, max_users: undefined, company: { code: 'DP01', name_en: 'Default Plan Co.', first_fiscal_year: 2026 } }));
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const tenant = (await platform.get('/platform/tenants')).body.find((t: { id: string }) => t.id === res.body.tenant_id);
+    expect(tenant).toMatchObject({ plan_code: 'standard', max_companies: 3, max_users: 25, plan_name_en: 'Standard' });
+  });
+});

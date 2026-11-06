@@ -1,6 +1,6 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Permission } from '@erp/shared';
+import { featureDef, featureForApiPath, type Permission, withDependencies } from '@erp/shared';
 import type { Request } from 'express';
 import { DbService } from '../db/db.service';
 import { AppError } from './app-error';
@@ -45,12 +45,13 @@ export class AuthGuard implements CanActivate {
     const companyId = companyHeader && UUID.test(companyHeader) ? companyHeader : null;
 
     const membership = await this.db.withTenant({ tenantId: claims.tid, userId: claims.sub }, async (tx) => {
-      const row = await tx.maybeOne<{ permissions: Permission[]; cost_center_scope: string[] | null }>(
-        `SELECT r.permissions, tu.cost_center_scope
+      const row = await tx.maybeOne<{ permissions: Permission[]; cost_center_scope: string[] | null; features: string[] | null }>(
+        `SELECT r.permissions, tu.cost_center_scope, p.features
          FROM core.tenant_users tu
          JOIN core.roles r ON r.tenant_id = tu.tenant_id AND r.id = tu.role_id
          JOIN core.tenants t ON t.id = tu.tenant_id
          JOIN core.users u ON u.id = tu.user_id
+         LEFT JOIN core.plans p ON p.code = t.plan_code
          WHERE tu.tenant_id = $1 AND tu.user_id = $2 AND tu.is_active AND t.is_active AND u.is_active`,
         [claims.tid, claims.sub],
       );
@@ -75,9 +76,16 @@ export class AuthGuard implements CanActivate {
       permissions: new Set(membership.permissions),
       companyId: membership.company ? companyId : null,
       costCenterScope: membership.cost_center_scope?.length ? membership.cost_center_scope : null,
+      features: new Set(withDependencies(membership.features ?? [])),
       ip: request.ip ?? '',
     };
     request.ctx = ctx;
+
+    // Modules outside the tenant's plan are closed, whatever the user's role allows.
+    const feature = featureForApiPath(request.path);
+    if (feature && !ctx.features.has(feature)) {
+      throw new AppError('FEATURE_NOT_IN_PLAN', { feature: featureDef(feature)?.name.en ?? feature });
+    }
 
     const required = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, targets) ?? [];
     const missing = required.find((p) => !ctx.permissions.has(p));

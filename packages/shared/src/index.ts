@@ -5,3 +5,4 @@ export * from './permissions';
 export * from './schemas';
 export * from './report-document';
 export * from './words';
+export * from './features';

@@ -113,7 +113,11 @@ export class AuthService {
     const tenants = await this.tenantsOf(ctx.userId);
     return this.db.withTenant(ctx, async (tx) => {
       const user = await tx.one('SELECT id, email, full_name, preferred_locale, digit_style, mfa_enabled FROM core.users WHERE id = $1', [ctx.userId]);
-      const tenant = await tx.one('SELECT id, name, plan_code FROM core.tenants WHERE id = $1', [ctx.tenantId]);
+      const tenant = await tx.one(
+        `SELECT t.id, t.name, t.plan_code, p.name_ar AS plan_name_ar, p.name_en AS plan_name_en
+         FROM core.tenants t LEFT JOIN core.plans p ON p.code = t.plan_code WHERE t.id = $1`,
+        [ctx.tenantId],
+      );
       const companies = await tx.query(
         `SELECT c.id, c.code, c.name_ar, c.name_en, c.base_currency, cur.minor_units AS base_minor_units, c.require_approval, c.is_active
          FROM core.companies c JOIN core.currencies cur ON cur.code = c.base_currency
@@ -125,6 +129,7 @@ export class AuthService {
         tenants,
         companies,
         permissions: [...ctx.permissions],
+        features: [...ctx.features],
         cost_center_scope: ctx.costCenterScope,
       };
     });

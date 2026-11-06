@@ -9,6 +9,8 @@ export type RequestContext = {
   companyId: string | null;
   /** Root cost centers the user may see; null means unrestricted. */
   costCenterScope: string[] | null;
+  /** Modules in the tenant's subscription plan. */
+  features: ReadonlySet<string>;
   ip: string;
 };
 
